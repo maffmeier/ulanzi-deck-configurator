@@ -53,7 +53,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: sh scripts/build.sh "ci-${GITHUB_SHA::7}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ulanzi-deck-${{ github.sha }}
           path: dist/
