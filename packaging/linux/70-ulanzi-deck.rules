@@ -1,0 +1,4 @@
+# Ulanzi Stream Controller D200: give the logged-in user access to the deck's
+# HID interface (uaccess) so ulanzi-deck runs without root.
+# Install: sudo cp 70-ulanzi-deck.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+KERNEL=="hidraw*", ATTRS{idVendor}=="2207", ATTRS{idProduct}=="0019", TAG+="uaccess"
