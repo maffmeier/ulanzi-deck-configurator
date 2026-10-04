@@ -106,9 +106,15 @@ internal/interfaces/
   tray/                       Tray-Icon
 ```
 
-## Lizenzen der eingebetteten Assets
+## Lizenz
 
-DejaVu Fonts (Bitstream Vera License), Liberation Fonts (SIL OFL 1.1),
-Font Awesome Free (Icons CC BY 4.0, Fonts SIL OFL 1.1),
-Twemoji (CC BY 4.0), Alpine.js (MIT). Die Lizenztexte der Fonts und Icons liegen neben den
-Dateien unter `internal/infrastructure/*/`.
+MIT – siehe [LICENSE](LICENSE). Protokoll und Treiber-Logik sind eine
+Go-Portierung von [ulanzi-linux](https://github.com/marcelobrake/ulanzi-linux)
+(MIT); dessen Vermerk sowie die Lizenzen der eingebetteten Fonts, Icons und
+von Alpine.js stehen in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Hinweis
+
+Inoffizielles Projekt, nicht mit Ulanzi oder Fuzhou Rockchip Electronics
+verbunden. „Ulanzi“ und „Stream Controller D200“ sind Marken der jeweiligen
+Inhaber. Nutzung auf eigenes Risiko.
