@@ -14,10 +14,23 @@ Abhängigkeiten.
 - Tray-Icon, Autostart, automatische Wiederverbindung nach dem Abstecken
 - Änderungen an der `deck.yaml` werden ohne Neustart übernommen
 
-Das Protokoll stammt aus dem Reverse Engineering von
-[ulanzi-linux](https://github.com/marcelobrake/ulanzi-linux) und
-[strmdck](https://github.com/redphx/strmdck); das YAML-Format ist zu
+Das Protokoll stammt aus dem Reverse Engineering der Community (siehe
+[Danksagung](#danksagung-und-vorarbeiten)); das YAML-Format ist zu
 ulanzi-linux kompatibel.
+
+> **KI-generiert:** Code, Tests und Dokumentation dieses Projekts wurden
+> größtenteils mit KI-Unterstützung erstellt, unter menschlicher Anleitung,
+> Prüfung und Tests am echten Gerät. Siehe [Entstehung](#entstehung).
+
+## Installation
+
+Fertige Binaries für Linux, Windows und macOS (amd64/arm64) entstehen mit
+`scripts/build.sh` (siehe [Entwicklung](#entwicklung)). Mit installiertem Go
+geht es auch direkt:
+
+```bash
+go install github.com/maffmeier/ulanzi-deck/cmd/ulanzi-deck@latest
+```
 
 ## Benutzung
 
@@ -105,6 +118,42 @@ internal/interfaces/
   web/                        HTTP-API und Editor (Alpine.js)
   tray/                       Tray-Icon
 ```
+
+## Danksagung und Vorarbeiten
+
+Ohne das Reverse Engineering der Community gäbe es dieses Projekt nicht:
+
+- **[marcelobrake/ulanzi-linux](https://github.com/marcelobrake/ulanzi-linux)**
+  – inoffizieller Linux-Client in Python. Protokoll, Gerätetreiber,
+  ZIP-Aufbau samt Firmware-Workarounds und Daemon-Logik sind eine
+  Go-Portierung davon; das `deck.yaml`-Format ist kompatibel.
+- **[redphx/strmdck](https://github.com/redphx/strmdck)** – die ursprüngliche
+  Python-Bibliothek, die das HID-Protokoll des D200 entschlüsselt hat.
+- **[redphx/homedeck](https://github.com/redphx/homedeck)** –
+  Home-Assistant-Integration auf Basis von strmdck, gute Referenz für das
+  Rendern von Icons.
+- **[UlanziTechnology/UlanziDeckPlugin-SDK](https://github.com/UlanziTechnology/UlanziDeckPlugin-SDK)**
+  – das offizielle Plugin-SDK der Windows-/Mac-Software, nützlich zum
+  Abgleich von Manifest und Icon-Größen.
+- **[Hackaday](https://hackaday.com/tag/ulanzi-d200/)** – Berichte, die
+  zeigten, dass auf dem Gerät Linux 5.10 auf einem Rockchip RK3308HS mit
+  offenem ADB-Root läuft.
+- **[rafaelmartins/usbhid](https://rafaelmartins.com/p/usbhid/)** – HID in
+  purem Go für alle drei Betriebssysteme.
+
+## Entstehung
+
+Dieses Projekt ist KI-generiert: Code, Tests, Oberfläche und Dokumentation
+wurden größtenteils von einem KI-Assistenten geschrieben – als
+Portierung von ulanzi-linux nach Go,
+erweitert um Plattformunterstützung für Windows und macOS, einen neuen
+Editor und weitere Aktionen. Anforderungen, Entscheidungen, Review und die
+Tests am echten D200 kamen vom Maintainer.
+
+Getestet ist die App am echten Gerät unter Linux (Wayland/sway). Die
+Windows- und macOS-Builds kompilieren und sind durch Unit-Tests abgedeckt,
+wurden aber noch nicht auf echter Hardware ausprobiert – Rückmeldungen und
+Pull Requests sind willkommen.
 
 ## Lizenz
 
