@@ -1,4 +1,4 @@
-module ulanzi-deck
+module github.com/maffmeier/ulanzi-deck
 
 go 1.26.0
 

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
 )
 
 func TestFrameLayout(t *testing.T) {

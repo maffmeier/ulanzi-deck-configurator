@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
 )
 
 // WatchConfig polls the config file and applies every valid change.

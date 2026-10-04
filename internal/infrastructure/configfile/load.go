@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
 )
 
 type rawAction struct {

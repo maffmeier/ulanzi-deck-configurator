@@ -8,7 +8,7 @@ import (
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
 
-	"ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
 )
 
 var (

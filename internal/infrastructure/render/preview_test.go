@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"ulanzi-deck/internal/domain/deck"
-	"ulanzi-deck/internal/infrastructure/catalog"
+	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/catalog"
 )
 
 // Writes sample images for visual inspection when PREVIEW_DIR is set.

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
 )
 
 // Transport is one opened HID handle; reads block until a report arrives.

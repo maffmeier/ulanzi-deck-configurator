@@ -16,7 +16,7 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
 
-	"ulanzi-deck/internal/infrastructure/strftime"
+	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/strftime"
 )
 
 type TemperatureSensor struct {
