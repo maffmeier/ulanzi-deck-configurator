@@ -1,0 +1,6 @@
+# Keep LF everywhere so Windows CI checkouts match the embedded files.
+* text=auto eol=lf
+*.ttf binary
+*.otf binary
+*.zip binary
+*.png binary

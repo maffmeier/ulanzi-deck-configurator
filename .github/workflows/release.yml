@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest, goos: linux,   goarch: amd64, cgo: '0' }
+          - { runner: ubuntu-latest, goos: linux,   goarch: arm64, cgo: '0' }
+          - { runner: ubuntu-latest, goos: windows, goarch: amd64, cgo: '0', ext: .exe, ldflags: -H windowsgui }
+          - { runner: ubuntu-latest, goos: windows, goarch: arm64, cgo: '0', ext: .exe, ldflags: -H windowsgui }
+          # Built natively with cgo so the macOS binaries include the tray icon.
+          - { runner: macos-latest,  goos: darwin,  goarch: arm64, cgo: '1' }
+          - { runner: macos-latest,  goos: darwin,  goarch: amd64, cgo: '1' }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          out="dist/ulanzi-deck-${GOOS}-${GOARCH}${{ matrix.ext }}"
+          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME} ${{ matrix.ldflags }}" -o "$out" ./cmd/ulanzi-deck
+          ls -l "$out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bin-*
+          path: dist
+          merge-multiple: true
+      - name: Prüfsummen
+        run: cd dist && sha256sum ulanzi-deck-* > SHA256SUMS && cat SHA256SUMS
+      - name: GitHub-Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "ulanzi-deck $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag

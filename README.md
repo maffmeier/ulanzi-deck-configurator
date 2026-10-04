@@ -1,5 +1,7 @@
 # Ulanzi Deck
 
+[![CI](https://github.com/maffmeier/ulanzi-deck/actions/workflows/ci.yml/badge.svg)](https://github.com/maffmeier/ulanzi-deck/actions/workflows/ci.yml)
+
 Steuerung und Konfiguration für den **Ulanzi Stream Controller D200**
 (USB `2207:0019`) unter Linux, Windows und macOS – eine einzelne Binary ohne
 Abhängigkeiten.
@@ -24,9 +26,15 @@ ulanzi-linux kompatibel.
 
 ## Installation
 
-Fertige Binaries für Linux, Windows und macOS (amd64/arm64) entstehen mit
-`scripts/build.sh` (siehe [Entwicklung](#entwicklung)). Mit installiertem Go
-geht es auch direkt:
+Fertige Binaries für Linux, Windows und macOS (amd64/arm64) gibt es unter
+[Releases](https://github.com/maffmeier/ulanzi-deck/releases), Prüfsummen in
+`SHA256SUMS`. Die Datei herunterladen, ausführbar machen und starten.
+
+macOS: Die Binaries sind nicht signiert. Beim ersten Start entweder im Finder
+per Rechtsklick → *Öffnen* bestätigen oder die Quarantäne entfernen:
+`xattr -d com.apple.quarantine ulanzi-deck-darwin-arm64`.
+
+Mit installiertem Go geht es auch direkt:
 
 ```bash
 go install github.com/maffmeier/ulanzi-deck/cmd/ulanzi-deck@latest
@@ -86,9 +94,9 @@ Co. stattdessen `exec ulanzi-deck` in die Compositor-Config eintragen.
 **Windows:** Die offizielle Ulanzi-Studio-Software darf nicht gleichzeitig
 laufen.
 
-**macOS:** Cross-kompilierte Builds haben kein Tray-Icon (dafür wäre cgo
-nötig). Auf einem Mac gebaut (`CGO_ENABLED=1 go build ./cmd/ulanzi-deck`)
-ist es dabei.
+**macOS:** Die Release-Binaries haben ein Tray-Icon. Mit `scripts/build.sh`
+cross-kompilierte Builds haben keins (dafür wäre cgo nötig); auf einem Mac
+gebaut (`CGO_ENABLED=1 go build ./cmd/ulanzi-deck`) ist es dabei.
 
 ## Entwicklung
 
@@ -98,6 +106,15 @@ Alles läuft im Docker-Container, auf dem Host wird nichts installiert.
 docker compose run --rm dev go test ./...           # Tests
 docker compose run --rm dev sh scripts/build.sh     # Binaries für alle Plattformen nach dist/
 docker compose run --rm dev sh scripts/fetch-assets.sh   # eingebettete Fonts/Icons neu laden
+```
+
+GitHub Actions prüft jeden Push (gofmt, vet, Tests auf Linux, Windows und
+macOS, Cross-Build). Ein Tag `v*` baut die Release-Binaries – macOS dabei
+nativ mit cgo, damit das Tray-Icon enthalten ist – und legt ein GitHub-Release
+an:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
 ```
 
 Aufbau (Domain-Driven):
