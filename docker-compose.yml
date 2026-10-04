@@ -1,0 +1,15 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /src
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      HOME: /tmp
+      GOCACHE: /src/.cache/go-build
+      GOMODCACHE: /src/.cache/gomod
+      GOFLAGS: -modcacherw
+      CGO_ENABLED: "0"
+    volumes:
+      - .:/src

@@ -1,0 +1,4 @@
+FROM golang:1.26
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends jq zip unzip bzip2 \
+ && rm -rf /var/lib/apt/lists/*
