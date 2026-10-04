@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ulanzi Deck</title>
+<link rel="icon" href="/static/favicon.png" />
+<link rel="stylesheet" href="/static/app.css" />
+</head>
+<body x-data="deckApp()" x-init="init()" @keydown.window="onKey($event)">
+
+<!-- ───────────── Kopfleiste ───────────── -->
+<header class="topbar">
+  <div class="brand">
+    <img src="/static/favicon.png" alt="" />
+    <span>Ulanzi Deck</span>
+  </div>
+
+  <template x-if="editor">
+  <nav class="pages">
+    <template x-for="page in editor?.pages || []" :key="page.name">
+      <button class="page-tab"
+              :class="{ active: page.name === currentPage, home: page.name === editor.default_page }"
+              @click="selectPage(page.name)"
+              @dblclick="renamePage(page.name)"
+              @dragover.prevent="dragOverPage = page.name"
+              @dragleave="dragOverPage = null"
+              @drop.prevent="dropOnPage($event, page.name)"
+              :data-over="dragOverPage === page.name"
+              :title="page.name === editor.default_page ? 'Startseite · Doppelklick zum Umbenennen' : 'Doppelklick zum Umbenennen'">
+        <span x-show="page.name === editor.default_page" class="home-dot" aria-hidden="true">⌂</span>
+        <span x-text="page.name"></span>
+      </button>
+    </template>
+    <button class="page-add" @click="addPage()" title="Neue Seite">+</button>
+  </nav>
+  </template>
+  <template x-if="editor">
+    <div class="page-menu" x-data="{ open: false }" @click.outside="open = false">
+      <button class="icon-btn" @click="open = !open" title="Seitenoptionen">⋯</button>
+      <div class="menu" x-show="open" x-transition.opacity>
+        <div class="menu-title" x-text="`Seite „${currentPage}“`"></div>
+        <button @click="open = false; renamePage(currentPage)">Umbenennen</button>
+        <button @click="open = false; editor.default_page = currentPage; markDirty()" :disabled="editor?.default_page === currentPage">Als Startseite festlegen</button>
+        <button @click="open = false; movePage(-1)" :disabled="pageNames().indexOf(currentPage) === 0">Nach links verschieben</button>
+        <button @click="open = false; movePage(1)" :disabled="pageNames().indexOf(currentPage) === pageNames().length - 1">Nach rechts verschieben</button>
+        <hr />
+        <button class="danger" @click="open = false; removePage()" :disabled="editor?.pages.length <= 1">Seite löschen</button>
+      </div>
+    </div>
+  </template>
+
+  <div class="top-actions">
+    <template x-if="editor">
+    <label class="brightness" title="Helligkeit des Displays">
+      <span aria-hidden="true">☀</span>
+      <input type="range" min="0" max="100" step="5" x-model.number="editor.brightness" @input="markDirty()" />
+      <output x-text="editor.brightness + '%'"></output>
+    </label>
+    </template>
+    <span class="conn" :class="health.deck_connected ? 'on' : 'off'"
+          :title="health.deck_connected ? 'Deck verbunden' : 'Kein Deck verbunden'">
+      <i></i><span x-text="health.deck_connected ? 'Verbunden' : 'Getrennt'"></span>
+    </span>
+    <button class="ghost" @click="reload()" :disabled="busy || !dirty" title="Ungespeicherte Änderungen verwerfen">Verwerfen</button>
+    <button class="primary" @click="save()" :disabled="busy || !dirty">
+      <span x-text="dirty ? 'Speichern' : 'Gespeichert'"></span>
+    </button>
+  </div>
+</header>
+
+<template x-if="editor">
+<main class="layout">
+
+  <!-- ───────────── Gerät ───────────── -->
+  <section class="stage" @click.self="selected = null">
+    <div class="device">
+      <div class="device-grid">
+        <template x-for="slot in slots" :key="slot.index">
+          <div class="key"
+               :class="keyClasses(slot)"
+               :style="`grid-column: ${slot.column} / span ${slot.span}; grid-row: ${slot.row}`"
+               draggable="true"
+               @click="select(slot.index)"
+               @dragstart="dragKey($event, slot.index)"
+               @dragend="dragOverKey = null"
+               @dragover.prevent="dragOverKey = slot.index"
+               @dragleave="dragOverKey = null"
+               @drop.prevent="dropOnKey($event, slot.index)"
+               :title="keyTooltip(slot)">
+
+            <template x-if="slot.kind === 'info'">
+              <div class="info-face" :style="`background:${editor.small_window.background_color}`">
+                <template x-if="!editor.small_window.enabled">
+                  <span class="info-off">Infofenster aus</span>
+                </template>
+                <template x-if="editor.small_window.enabled && infoShowsStats()">
+                  <div class="info-stats">
+                    <template x-for="line in infoStatLines()" :key="line.label">
+                      <div><span x-text="line.label"></span><b x-text="line.value"></b></div>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="editor.small_window.enabled && !infoShowsStats()">
+                  <div class="info-clock" :style="`--chars:${Math.max(5, (preview.time_text || '').length)}`" x-text="preview.time_text"></div>
+                </template>
+              </div>
+            </template>
+
+            <template x-if="slot.kind !== 'info'">
+              <div class="key-face" :style="faceStyle(button(slot.index))">
+                <template x-if="button(slot.index)?.preview_url">
+                  <img :src="button(slot.index).preview_url" alt="" draggable="false" />
+                </template>
+                <template x-if="!button(slot.index)?.preview_url && button(slot.index)?.label">
+                  <span class="key-label" :style="labelStyle(button(slot.index))" x-text="button(slot.index).label"></span>
+                </template>
+              </div>
+            </template>
+
+            <button class="key-pin"
+                    :class="{ on: isFixed(slot.index) }"
+                    @click.stop="select(slot.index); toggleFixed()"
+                    :title="isFixed(slot.index) ? 'Angepinnt: auf allen Seiten. Klicken zum Lösen' : 'Anpinnen: auf allen Seiten anzeigen'">📌</button>
+            <span class="badge action" x-show="button(slot.index)?.action?.type && button(slot.index).action.type !== 'none'">
+              <img :src="actionIconUrl(button(slot.index)?.action)" alt="" />
+            </span>
+          </div>
+        </template>
+      </div>
+      <div class="device-brand">ULANZI</div>
+    </div>
+
+    <p class="stage-hint" x-show="selected === null">
+      Ziehe eine Aktion von rechts auf eine Taste – oder klicke eine Taste an, um sie zu bearbeiten.
+      Tasten lassen sich per Drag &amp; Drop verschieben, Bilder direkt aus dem Dateimanager draufziehen.
+      Mit 📌 pinnst du eine Taste auf alle Seiten.
+    </p>
+  </section>
+
+  <!-- ───────────── Aktionsliste ───────────── -->
+  <aside class="actions-panel">
+    <input class="search" type="search" placeholder="Aktionen suchen …" x-model="actionQuery" />
+    <template x-for="group in filteredActionGroups()" :key="group.name">
+      <details class="action-group" open>
+        <summary x-text="group.name"></summary>
+        <template x-for="preset in group.items" :key="preset.id">
+          <div class="action-item"
+               draggable="true"
+               @dragstart="dragPreset($event, preset)"
+               @dblclick="applyPresetToSelected(preset)"
+               :title="preset.hint + ' · Doppelklick: auf ausgewählte Taste anwenden'">
+            <img :src="iconUrl(preset.icon)" alt="" draggable="false" />
+            <span x-text="preset.label"></span>
+          </div>
+        </template>
+      </details>
+    </template>
+  </aside>
+
+  <!-- ───────────── Eigenschaften ───────────── -->
+  <section class="inspector">
+    <template x-if="selected === null">
+      <div class="inspector-empty">
+        <div>
+          <h3>Keine Taste ausgewählt</h3>
+          <p>Wähle oben eine Taste oder das Infofenster aus.</p>
+        </div>
+        <div class="file-info">
+          <span>Konfiguration</span>
+          <code x-text="editor?.path"></code>
+          <label class="check"><input type="checkbox" x-model="saveBundle" /> Beim Speichern zusätzlich das Upload-ZIP ablegen</label>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="selected !== null && selected !== INFO_INDEX && cur">
+      <div class="props">
+        <div class="props-preview">
+          <div class="key big" :class="{ empty: !cur.preview_url && !cur.label }">
+            <div class="key-face" :style="faceStyle(cur)">
+              <template x-if="cur.preview_url"><img :src="cur.preview_url" alt="" /></template>
+              <template x-if="!cur.preview_url && cur.label">
+                <span class="key-label" :style="labelStyle(cur)" x-text="cur.label"></span>
+              </template>
+            </div>
+          </div>
+          <div class="preview-buttons">
+            <button @click="$refs.upload.click()" title="Bild hochladen">Bild …</button>
+            <button @click="openCatalog()" title="Icon aus dem Katalog">Katalog …</button>
+            <button class="ghost" @click="cur.icon_path = ''; cur.preview_url = ''; markDirty()" x-show="cur.icon_path">Bild entfernen</button>
+            <input type="file" accept="image/*" x-ref="upload" hidden @change="uploadIcon($event.target.files[0]); $event.target.value = ''" />
+          </div>
+        </div>
+
+        <div class="props-main">
+          <div class="props-head">
+            <h3 x-text="'Taste ' + (selected + 1)"></h3>
+            <button class="pin-toggle" :class="{ on: isFixed(selected) }" @click="toggleFixed()"
+                    title="Angepinnte Tasten erscheinen auf allen Seiten an derselben Position">
+              📌 <span x-text="isFixed(selected) ? 'Angepinnt (alle Seiten)' : 'Anpinnen'"></span>
+            </button>
+            <button class="ghost danger" @click="clearSelected()">Taste leeren</button>
+          </div>
+
+          <div class="row">
+            <label class="field grow">
+              <span>Titel</span>
+              <input type="text" x-model="cur.label" @input="markDirty()" placeholder="Wird angezeigt, wenn kein Bild gesetzt ist" />
+            </label>
+            <label class="field">
+              <span>Aktion</span>
+              <select x-model="cur.action.type" @change="actionTypeChanged()">
+                <template x-for="(label, type) in ACTION_LABELS" :key="type">
+                  <option :value="type" x-text="label"></option>
+                </template>
+              </select>
+            </label>
+          </div>
+
+          <template x-if="cur.action.type === 'shell'">
+            <label class="field">
+              <span>Befehl</span>
+              <input type="text" class="mono" x-model="cur.action.cmd" @input="markDirty()" :placeholder="shellPlaceholder" />
+            </label>
+          </template>
+          <template x-if="cur.action.type === 'shortcut'">
+            <label class="field">
+              <span>Tastenkürzel</span>
+              <div class="shortcut">
+                <input type="text" class="mono" x-model="cur.action.keys" @input="markDirty()" placeholder="z.B. ctrl+alt+t oder super+Return" />
+                <button :class="{ recording }" @click="recordShortcut()" x-text="recording ? 'Drücke Tasten …' : 'Aufnehmen'"></button>
+              </div>
+            </label>
+          </template>
+          <template x-if="cur.action.type === 'url'">
+            <label class="field">
+              <span>Adresse</span>
+              <input type="url" x-model="cur.action.url" @input="markDirty()" placeholder="https://…" />
+            </label>
+          </template>
+          <template x-if="cur.action.type === 'switch_page'">
+            <label class="field">
+              <span>Ziel</span>
+              <select x-model="cur.action.page" @change="markDirty()">
+                <option value="@next">→ Nächste Seite</option>
+                <option value="@prev">← Vorherige Seite</option>
+                <template x-for="name in pageNames()" :key="name">
+                  <option :value="name" x-text="'Seite: ' + name"></option>
+                </template>
+              </select>
+            </label>
+          </template>
+          <template x-if="cur.action.type === 'predefined_command'">
+            <label class="field">
+              <span>Funktion</span>
+              <select x-model="cur.action.command_id" @change="markDirty()">
+                <template x-for="g in predefinedGroups()" :key="g.name">
+                  <optgroup :label="g.name">
+                    <template x-for="p in g.items" :key="p.id">
+                      <option :value="p.id" x-text="p.label" :selected="p.id === cur.action.command_id"></option>
+                    </template>
+                  </optgroup>
+                </template>
+              </select>
+            </label>
+          </template>
+
+          <details class="text-style" :open="!cur.preview_url">
+            <summary>Textdarstellung (ohne Bild)</summary>
+            <div class="row">
+              <label class="field color"><span>Hintergrund</span>
+                <input type="color" x-model="cur.text_style.background_color" @input="markDirty()" /></label>
+              <label class="field color"><span>Schrift</span>
+                <input type="color" x-model="cur.text_style.text_color" @input="markDirty()" /></label>
+              <label class="field"><span>Schriftart</span>
+                <select x-model="cur.text_style.font_family" @change="markDirty()">
+                  <template x-for="f in FONTS" :key="f"><option :value="f" x-text="f"></option></template>
+                </select></label>
+              <label class="field"><span>Größe <b x-text="cur.text_style.font_size"></b></span>
+                <input type="range" min="12" max="96" x-model.number="cur.text_style.font_size" @input="markDirty()" /></label>
+              <div class="toggles">
+                <button :class="{ on: cur.text_style.bold }" @click="cur.text_style.bold = !cur.text_style.bold; markDirty()"><b>F</b></button>
+                <button :class="{ on: cur.text_style.italic }" @click="cur.text_style.italic = !cur.text_style.italic; markDirty()"><i>K</i></button>
+                <button :class="{ on: cur.text_style.underline }" @click="cur.text_style.underline = !cur.text_style.underline; markDirty()"><u>U</u></button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="selected === INFO_INDEX && cur">
+      <div class="props info-props">
+        <div class="props-main">
+          <div class="props-head">
+            <h3>Infofenster</h3>
+            <label class="check"><input type="checkbox" x-model="editor.small_window.enabled" @change="markDirty()" /> Aktiv</label>
+            <button class="pin-toggle" :class="{ on: isFixed(INFO_INDEX) }" @click="toggleFixed()"
+                    title="Angepinnt gilt die Aktion beim Antippen auf allen Seiten">
+              📌 <span x-text="isFixed(INFO_INDEX) ? 'Aktion angepinnt (alle Seiten)' : 'Aktion anpinnen'"></span>
+            </button>
+          </div>
+          <div class="row">
+            <label class="field">
+              <span>Anzeige</span>
+              <select :value="infoMode()" @change="setInfoMode($event.target.value)" :disabled="!editor.small_window.enabled">
+                <option value="clock">Uhr</option>
+                <option value="stats">CPU / RAM</option>
+                <option value="rotate">Uhr und Statistik im Wechsel</option>
+              </select>
+            </label>
+            <label class="field" x-show="infoMode() === 'rotate'">
+              <span>Wechsel alle (s)</span>
+              <input type="number" min="1" step="1" x-model.number="editor.small_window.rotate_every_s" @input="markDirty()" />
+            </label>
+            <label class="field">
+              <span>Zeitformat</span>
+              <input type="text" class="mono" x-model="editor.small_window.time_format" @input="markDirty()" placeholder="%H:%M" />
+            </label>
+            <label class="field color">
+              <span>Hintergrund</span>
+              <input type="color" x-model="editor.small_window.background_color" @input="markDirty()" />
+            </label>
+            <label class="field">
+              <span>Aktion beim Antippen</span>
+              <select x-model="cur.action.type" @change="actionTypeChanged()">
+                <template x-for="(label, type) in ACTION_LABELS" :key="type">
+                  <option :value="type" x-text="label"></option>
+                </template>
+              </select>
+            </label>
+          </div>
+
+          <div class="field">
+            <span>Eigene Messwerte statt Firmware-Anzeige (bis zu 3)</span>
+            <div class="chips">
+              <template x-for="m in METRICS" :key="m.id">
+                <button class="chip" :class="{ on: editor.small_window.metrics_items.includes(m.id) }"
+                        :disabled="!editor.small_window.metrics_items.includes(m.id) && editor.small_window.metrics_items.length >= 3"
+                        @click="toggleMetric(m.id)" x-text="m.label"></button>
+              </template>
+            </div>
+          </div>
+
+          <div class="field" x-show="editor.small_window.metrics_items.includes('temperature') && sensors.length">
+            <span>Temperatursensoren (bis zu 3, in dieser Reihenfolge)</span>
+            <div class="chips">
+              <template x-for="s in sensors" :key="s.id">
+                <button class="chip" :class="{ on: editor.small_window.temperature_sensors.includes(s.id) }"
+                        :disabled="!editor.small_window.temperature_sensors.includes(s.id) && editor.small_window.temperature_sensors.length >= 3"
+                        @click="toggleSensor(s.id)"
+                        x-text="`${s.name} · ${s.value_celsius ?? '–'}°C`"></button>
+              </template>
+            </div>
+          </div>
+
+          <template x-if="cur.action.type === 'shell'">
+            <label class="field"><span>Befehl</span>
+              <input type="text" class="mono" x-model="cur.action.cmd" @input="markDirty()" /></label>
+          </template>
+          <template x-if="cur.action.type === 'url'">
+            <label class="field"><span>Adresse</span>
+              <input type="url" x-model="cur.action.url" @input="markDirty()" /></label>
+          </template>
+          <template x-if="cur.action.type === 'shortcut'">
+            <label class="field"><span>Tastenkürzel</span>
+              <input type="text" class="mono" x-model="cur.action.keys" @input="markDirty()" /></label>
+          </template>
+          <template x-if="cur.action.type === 'predefined_command'">
+            <label class="field"><span>Funktion</span>
+              <select x-model="cur.action.command_id" @change="markDirty()">
+                <template x-for="g in predefinedGroups()" :key="g.name">
+                  <optgroup :label="g.name">
+                    <template x-for="p in g.items" :key="p.id">
+                      <option :value="p.id" x-text="p.label" :selected="p.id === cur.action.command_id"></option>
+                    </template>
+                  </optgroup>
+                </template>
+              </select></label>
+          </template>
+          <template x-if="cur.action.type === 'switch_page'">
+            <label class="field"><span>Ziel</span>
+              <select x-model="cur.action.page" @change="markDirty()">
+                <option value="@next">→ Nächste Seite</option>
+                <option value="@prev">← Vorherige Seite</option>
+                <template x-for="name in pageNames()" :key="name"><option :value="name" x-text="'Seite: ' + name"></option></template>
+              </select></label>
+          </template>
+        </div>
+      </div>
+    </template>
+  </section>
+</main>
+</template>
+
+<!-- ───────────── Icon-Katalog ───────────── -->
+<div class="modal" x-show="catalog.open" x-cloak x-transition.opacity @keydown.escape.window="catalog.open = false">
+  <div class="modal-box" @click.outside="catalog.open = false">
+    <header>
+      <h3>Icon-Katalog</h3>
+      <input type="search" placeholder="Suchen, z.B. play, terminal, github, herz …" x-model="catalog.query" x-ref="catalogSearch" />
+      <select x-model="catalog.style">
+        <option value="all">Alle</option>
+        <option value="solid">Gefüllt</option>
+        <option value="regular">Umriss</option>
+        <option value="brands">Marken</option>
+        <option value="emoji">Emojis</option>
+      </select>
+      <button class="icon-btn" @click="catalog.open = false" title="Schließen">✕</button>
+    </header>
+    <div class="catalog-grid">
+      <template x-for="icon in catalogResults()" :key="icon.asset_id">
+        <button class="catalog-item" @click="useCatalogIcon(icon)" :title="icon.name">
+          <img :src="icon.preview_url" loading="lazy" alt="" />
+          <span x-text="icon.name"></span>
+        </button>
+      </template>
+    </div>
+    <footer x-text="catalogSummary()"></footer>
+  </div>
+</div>
+
+<!-- ───────────── Meldungen ───────────── -->
+<div class="toasts">
+  <template x-for="t in toasts" :key="t.id">
+    <div class="toast" :class="t.kind" x-text="t.text" x-transition></div>
+  </template>
+</div>
+
+<script src="/static/app.js"></script>
+<script src="/static/alpine.min.js" defer></script>
+</body>
+</html>
