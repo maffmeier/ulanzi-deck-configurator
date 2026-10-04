@@ -21,13 +21,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/actions"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/catalog"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/configfile"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/d200"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/metrics"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/render"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/configfile"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/d200"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 )
 
 //go:embed static

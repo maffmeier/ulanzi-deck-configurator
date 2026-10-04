@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 // Deck is the device surface the daemon needs; the D200 driver implements

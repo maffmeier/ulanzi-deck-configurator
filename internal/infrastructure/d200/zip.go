@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/render"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 )
 
 const (

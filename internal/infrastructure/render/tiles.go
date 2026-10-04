@@ -22,7 +22,7 @@ import (
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 // opentype faces keep internal scratch buffers and are not safe for

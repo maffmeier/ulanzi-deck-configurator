@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 func decodeSize(t *testing.T, data []byte) (int, int) {

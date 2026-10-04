@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 type fakeDeck struct {

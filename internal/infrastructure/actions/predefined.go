@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 // PredefinedInfo describes a built-in action for the editor's action list.

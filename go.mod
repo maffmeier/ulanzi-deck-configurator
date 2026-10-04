@@ -1,4 +1,4 @@
-module github.com/maffmeier/ulanzi-deck
+module github.com/maffmeier/ulanzi-deck-configurator
 
 go 1.26.0
 

@@ -6,7 +6,7 @@ import (
 
 	"rafaelmartins.com/p/usbhid"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 var ErrDeviceNotFound = errors.New("no Ulanzi D200 found")

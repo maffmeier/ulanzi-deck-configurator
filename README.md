@@ -1,6 +1,6 @@
 # Ulanzi Deck
 
-[![CI](https://github.com/maffmeier/ulanzi-deck/actions/workflows/ci.yml/badge.svg)](https://github.com/maffmeier/ulanzi-deck/actions/workflows/ci.yml)
+[![CI](https://github.com/maffmeier/ulanzi-deck-configurator/actions/workflows/ci.yml/badge.svg)](https://github.com/maffmeier/ulanzi-deck-configurator/actions/workflows/ci.yml)
 
 Steuerung und Konfiguration für den **Ulanzi Stream Controller D200**
 (USB `2207:0019`) unter Linux, Windows und macOS – eine einzelne Binary ohne
@@ -27,7 +27,7 @@ ulanzi-linux kompatibel.
 ## Installation
 
 Fertige Binaries für Linux, Windows und macOS (amd64/arm64) gibt es unter
-[Releases](https://github.com/maffmeier/ulanzi-deck/releases), Prüfsummen in
+[Releases](https://github.com/maffmeier/ulanzi-deck-configurator/releases), Prüfsummen in
 `SHA256SUMS`. Die Datei herunterladen, ausführbar machen und starten.
 
 macOS: Die Binaries sind nicht signiert. Beim ersten Start entweder im Finder
@@ -37,7 +37,7 @@ per Rechtsklick → *Öffnen* bestätigen oder die Quarantäne entfernen:
 Mit installiertem Go geht es auch direkt:
 
 ```bash
-go install github.com/maffmeier/ulanzi-deck/cmd/ulanzi-deck@latest
+go install github.com/maffmeier/ulanzi-deck-configurator/cmd/ulanzi-deck@latest
 ```
 
 ## Benutzung

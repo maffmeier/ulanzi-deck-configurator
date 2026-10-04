@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/configfile"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/configfile"
 )
 
 // The JSON shapes below are the HTTP contract of the editor frontend

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/actions"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/catalog"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/configfile"
-	"github.com/maffmeier/ulanzi-deck/internal/infrastructure/metrics"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/configfile"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
 )
 
 func newTestServer(t *testing.T) (*Server, http.Handler) {

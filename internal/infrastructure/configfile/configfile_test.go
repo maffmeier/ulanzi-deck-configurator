@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maffmeier/ulanzi-deck/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 func TestLoadsPythonExampleConfigs(t *testing.T) {
