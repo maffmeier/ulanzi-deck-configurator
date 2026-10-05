@@ -61,8 +61,31 @@ func (f *fakeDeck) lastUploadLabel(index int) string {
 }
 
 type fakeRunner struct {
-	mu  sync.Mutex
-	ran []deck.Action
+	mu       sync.Mutex
+	ran      []deck.Action
+	pressed  []string
+	released []string
+}
+
+func (r *fakeRunner) Press(a deck.Action) (func(), error) {
+	r.mu.Lock()
+	r.pressed = append(r.pressed, a.Keys)
+	r.mu.Unlock()
+	return func() {
+		r.mu.Lock()
+		r.released = append(r.released, a.Keys)
+		r.mu.Unlock()
+	}, nil
+}
+
+func (r *fakeRunner) commands() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []string
+	for _, a := range r.ran {
+		out = append(out, a.Cmd)
+	}
+	return out
 }
 
 func (r *fakeRunner) Run(a deck.Action) error {
@@ -103,6 +126,7 @@ func startDaemon(t *testing.T, cfg *deck.Config) (*Daemon, *fakeDeck, *fakeRunne
 	t.Helper()
 	dev, runner := newFakeDeck(), &fakeRunner{}
 	d := NewDaemon(dev, runner, fakeMetrics{}, fakeRenderer{}, cfg, slog.New(slog.DiscardHandler))
+	d.timing = pressTiming{longPress: 80 * time.Millisecond, repeatDelay: 60 * time.Millisecond, repeatInterval: 20 * time.Millisecond}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { d.Run(ctx); close(done) }()
@@ -188,4 +212,77 @@ func TestEnabledSmallWindowPushesClock(t *testing.T) {
 		defer dev.mu.Unlock()
 		return dev.data > 0 && len(dev.modes) > 0 && dev.modes[0] == deck.SmallWindowClock
 	})
+}
+
+func shell(cmd string) *deck.Action { return &deck.Action{Type: deck.ActionShell, Cmd: cmd} }
+
+func behaviorConfig() *deck.Config {
+	cfg := pagedConfig()
+	cfg.Pages[0].Buttons = append(cfg.Pages[0].Buttons,
+		deck.Button{Index: 2, Action: shell("short"), LongPress: shell("long"), Press: deck.PressTap},
+		deck.Button{Index: 3, Action: shell("again"), Press: deck.PressRepeat},
+		deck.Button{Index: 5, Action: &deck.Action{Type: deck.ActionShortcut, Keys: "ctrl+shift+m"}, Press: deck.PressHold},
+	)
+	return cfg
+}
+
+func TestShortPressRunsPrimaryOnRelease(t *testing.T) {
+	_, dev, runner := startDaemon(t, behaviorConfig())
+	dev.events <- deck.ButtonEvent{Index: 2, Pressed: true}
+	time.Sleep(20 * time.Millisecond)
+	if len(runner.commands()) != 0 {
+		t.Fatal("primary must wait for the release")
+	}
+	dev.events <- deck.ButtonEvent{Index: 2, Pressed: false}
+	eventually(t, func() bool { c := runner.commands(); return len(c) == 1 && c[0] == "short" })
+	time.Sleep(150 * time.Millisecond)
+	if c := runner.commands(); len(c) != 1 {
+		t.Fatalf("long press must not fire after a short press: %v", c)
+	}
+}
+
+func TestLongPressRunsSecondaryOnly(t *testing.T) {
+	_, dev, runner := startDaemon(t, behaviorConfig())
+	dev.events <- deck.ButtonEvent{Index: 2, Pressed: true}
+	eventually(t, func() bool { c := runner.commands(); return len(c) == 1 && c[0] == "long" })
+	dev.events <- deck.ButtonEvent{Index: 2, Pressed: false}
+	time.Sleep(50 * time.Millisecond)
+	if c := runner.commands(); len(c) != 1 {
+		t.Fatalf("release after a long press must not run the primary: %v", c)
+	}
+}
+
+func TestRepeatWhileHeld(t *testing.T) {
+	_, dev, runner := startDaemon(t, behaviorConfig())
+	dev.events <- deck.ButtonEvent{Index: 3, Pressed: true}
+	eventually(t, func() bool { return len(runner.commands()) >= 4 })
+	dev.events <- deck.ButtonEvent{Index: 3, Pressed: false}
+	time.Sleep(30 * time.Millisecond)
+	n := len(runner.commands())
+	time.Sleep(100 * time.Millisecond)
+	if len(runner.commands()) != n {
+		t.Fatal("repeat must stop after release")
+	}
+}
+
+func TestHoldPassesPressAndRelease(t *testing.T) {
+	_, dev, runner := startDaemon(t, behaviorConfig())
+	dev.events <- deck.ButtonEvent{Index: 5, Pressed: true}
+	eventually(t, func() bool { runner.mu.Lock(); defer runner.mu.Unlock(); return len(runner.pressed) == 1 })
+	runner.mu.Lock()
+	early := len(runner.released)
+	runner.mu.Unlock()
+	if early != 0 {
+		t.Fatal("must stay pressed until release")
+	}
+	dev.events <- deck.ButtonEvent{Index: 5, Pressed: false}
+	eventually(t, func() bool { runner.mu.Lock(); defer runner.mu.Unlock(); return len(runner.released) == 1 })
+}
+
+func TestDisconnectReleasesHeldKeys(t *testing.T) {
+	_, dev, runner := startDaemon(t, behaviorConfig())
+	dev.events <- deck.ButtonEvent{Index: 5, Pressed: true}
+	eventually(t, func() bool { runner.mu.Lock(); defer runner.mu.Unlock(); return len(runner.pressed) == 1 })
+	dev.events <- deck.ConnectionEvent{Connected: false}
+	eventually(t, func() bool { runner.mu.Lock(); defer runner.mu.Unlock(); return len(runner.released) == 1 })
 }

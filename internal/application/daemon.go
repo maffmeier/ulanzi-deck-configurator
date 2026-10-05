@@ -27,6 +27,8 @@ type Deck interface {
 
 type ActionRunner interface {
 	Run(action deck.Action) error
+	// Press holds a shortcut until the returned release is called.
+	Press(action deck.Action) (func(), error)
 }
 
 type Metrics interface {
@@ -57,6 +59,10 @@ type Daemon struct {
 	cfg    *deck.Config
 	page   string
 	wakeup chan struct{}
+
+	timing pressTiming
+	heldMu sync.Mutex
+	held   map[int]*heldKey
 }
 
 func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, cfg *deck.Config, log *slog.Logger) *Daemon {
@@ -69,6 +75,8 @@ func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer
 		cfg:      cfg,
 		page:     cfg.DefaultPage,
 		wakeup:   make(chan struct{}, 1),
+		timing:   defaultPressTiming,
+		held:     map[int]*heldKey{},
 	}
 }
 
@@ -165,6 +173,7 @@ func (d *Daemon) poke() {
 }
 
 func (d *Daemon) eventLoop(ctx context.Context) {
+	defer d.releaseAll()
 	for {
 		select {
 		case <-ctx.Done():
@@ -173,36 +182,20 @@ func (d *Daemon) eventLoop(ctx context.Context) {
 			switch e := ev.(type) {
 			case deck.ButtonEvent:
 				if e.Pressed {
-					d.handlePress(e.Index)
+					d.onPress(e.Index)
+				} else {
+					d.onRelease(e.Index)
 				}
 			case deck.ConnectionEvent:
 				if e.Connected {
 					// The status loop restarts its mode handshake.
 					d.poke()
+				} else {
+					// A release may never arrive; don't leave keys stuck.
+					d.releaseAll()
 				}
 			}
 		}
-	}
-}
-
-func (d *Daemon) handlePress(index int) {
-	d.mu.Lock()
-	page := d.page
-	button := d.cfg.ButtonAt(page, index)
-	d.mu.Unlock()
-
-	if button == nil || button.Action == nil {
-		d.log.Debug("no action bound", "index", index, "page", page)
-		return
-	}
-	action := *button.Action
-	d.log.Info("button pressed", "index", index, "page", page, "action", action.Type)
-	if action.Type == deck.ActionSwitchPage {
-		d.SwitchTo(action.Page)
-		return
-	}
-	if err := d.runner.Run(action); err != nil {
-		d.log.Error("action failed", "index", index, "page", page, "action", action.Type, "error", err)
 	}
 }
 
