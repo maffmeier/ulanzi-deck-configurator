@@ -3,7 +3,6 @@ package render
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
@@ -21,7 +20,7 @@ func TestWritePreviews(t *testing.T) {
 	files := map[string][]byte{
 		"text.png":    ButtonIcon(deck.Button{Index: 0, Label: "Weiter → Seite", TextStyle: style}),
 		"bold.png":    ButtonIcon(deck.Button{Index: 0, Label: "Mute", TextStyle: bold}),
-		"clock.png":   SmallWindowClockPNG("#000000", time.Date(2026, 10, 4, 10, 8, 30, 0, time.Local)),
+		"clock.png":   SmallWindowClockPNG("#FF0000", "05/10 10:08"),
 		"metrics.png": SmallWindowMetricsPNG("#0B1220", []string{"CPU  12%", "MEM  40%", "TEMP 55C | 61C"}),
 	}
 	c, _ := catalog.Load()

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"image/png"
 	"testing"
-	"time"
 
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
@@ -28,7 +27,7 @@ func TestTileSizes(t *testing.T) {
 		{"text", ButtonIcon(deck.Button{Index: 0, Label: "Ein langer Text der umbricht", TextStyle: style}), 196, 196},
 		{"blank", ButtonIcon(deck.Button{Index: 1, TextStyle: style}), 196, 196},
 		{"info", ButtonIcon(deck.Button{Index: deck.InfoWindowIndex, TextStyle: style}), 392, 196},
-		{"clock", SmallWindowClockPNG("#000000", time.Now()), 392, 196},
+		{"clock", SmallWindowClockPNG("#000000", "04/10 23:08"), 392, 196},
 		{"metrics", SmallWindowMetricsPNG("#102030", []string{"CPU  12%", "MEM  40%", "TEMP 55C"}), 392, 196},
 	}
 	for _, c := range cases {
