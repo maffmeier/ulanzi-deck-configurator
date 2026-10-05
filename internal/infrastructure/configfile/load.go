@@ -41,6 +41,8 @@ type rawButton struct {
 	Label     string        `yaml:"label"`
 	Action    *rawAction    `yaml:"action"`
 	TextStyle *rawTextStyle `yaml:"text_style"`
+	Press     string        `yaml:"press"`
+	LongPress *rawAction    `yaml:"long_press"`
 }
 
 type rawSmallWindow struct {
@@ -232,21 +234,35 @@ func parseButton(raw rawButton, baseDir string) (deck.Button, error) {
 	if raw.Icon != "" {
 		button.ResolvedIcon = ResolvePath(raw.Icon, baseDir)
 	}
-	if raw.Action != nil {
-		action := deck.Action{
-			Type:      deck.ActionType(raw.Action.Type),
-			Cmd:       raw.Action.Cmd,
-			Keys:      raw.Action.Keys,
-			URL:       raw.Action.URL,
-			Page:      raw.Action.Page,
-			CommandID: raw.Action.CommandID,
-		}
-		if err := action.Validate(); err != nil {
-			return deck.Button{}, err
-		}
-		button.Action = &action
+	if button.Action, err = parseAction(raw.Action); err != nil {
+		return deck.Button{}, err
+	}
+	if button.LongPress, err = parseAction(raw.LongPress); err != nil {
+		return deck.Button{}, fmt.Errorf("long_press: %w", err)
+	}
+	button.Press = deck.PressMode(raw.Press)
+	if err := button.ValidateBehavior(); err != nil {
+		return deck.Button{}, err
 	}
 	return button, nil
+}
+
+func parseAction(raw *rawAction) (*deck.Action, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	action := deck.Action{
+		Type:      deck.ActionType(raw.Type),
+		Cmd:       raw.Cmd,
+		Keys:      raw.Keys,
+		URL:       raw.URL,
+		Page:      raw.Page,
+		CommandID: raw.CommandID,
+	}
+	if err := action.Validate(); err != nil {
+		return nil, err
+	}
+	return &action, nil
 }
 
 // ResolvePath expands "~" and makes relative paths absolute against baseDir.

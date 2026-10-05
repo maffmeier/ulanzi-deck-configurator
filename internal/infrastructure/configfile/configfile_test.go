@@ -138,3 +138,42 @@ func TestWriteAtomicAndVersionedPath(t *testing.T) {
 		t.Fatalf("temp file left behind: %v", entries)
 	}
 }
+
+func TestPressModesRoundTrip(t *testing.T) {
+	text := `buttons:
+  - index: 0
+    action: {type: predefined_command, command_id: media_play_pause}
+    long_press: {type: predefined_command, command_id: media_next}
+  - index: 1
+    action: {type: predefined_command, command_id: audio_volume_up}
+    press: repeat
+  - index: 2
+    action: {type: shortcut, keys: ctrl+shift+m}
+    press: hold
+`
+	cfg, err := Parse([]byte(text), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := cfg.Pages[0].Buttons
+	if b[0].LongPress == nil || b[0].LongPress.CommandID != "media_next" || b[1].Press != deck.PressRepeat || b[2].Press != deck.PressHold {
+		t.Fatalf("parsed %+v", b)
+	}
+	data, err := Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "press: tap") {
+		t.Fatal("default press mode must be omitted")
+	}
+	again, err := Parse(data, ".")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, data)
+	}
+	if again.Pages[0].Buttons[2].Press != deck.PressHold || again.Pages[0].Buttons[0].LongPress == nil {
+		t.Fatal("round trip lost press settings")
+	}
+	if _, err := Parse([]byte("buttons:\n  - index: 0\n    action: {type: switch_page, page: x}\n    press: hold\n"), "."); err == nil {
+		t.Fatal("hold on switch_page must fail")
+	}
+}

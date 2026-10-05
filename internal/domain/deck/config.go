@@ -128,6 +128,54 @@ type Button struct {
 	Label     string
 	Action    *Action
 	TextStyle TextStyle
+	// Press decides what holding the key does; LongPress is a second action
+	// fired once the key is held past the long-press threshold (tap only).
+	Press     PressMode
+	LongPress *Action
+}
+
+type PressMode string
+
+const (
+	// PressTap fires the action once; with LongPress set, a short press
+	// fires Action on release and a long press fires LongPress instead.
+	PressTap PressMode = "tap"
+	// PressRepeat fires the action on press and repeats it while held.
+	PressRepeat PressMode = "repeat"
+	// PressHold keeps a shortcut pressed while the key is held, e.g. for
+	// push-to-talk.
+	PressHold PressMode = "hold"
+)
+
+// ValidateBehavior checks that press mode, action and long press fit
+// together; an empty mode is normalized to tap.
+func (b *Button) ValidateBehavior() error {
+	switch b.Press {
+	case "":
+		b.Press = PressTap
+	case PressTap, PressRepeat, PressHold:
+	default:
+		return fmt.Errorf("unknown press mode %q (tap, repeat or hold)", b.Press)
+	}
+	if b.LongPress != nil {
+		if b.Press != PressTap {
+			return fmt.Errorf("long_press cannot be combined with press: %s", b.Press)
+		}
+		if err := b.LongPress.Validate(); err != nil {
+			return fmt.Errorf("long_press: %w", err)
+		}
+	}
+	switch b.Press {
+	case PressRepeat:
+		if b.Action == nil || b.Action.Type == ActionSwitchPage {
+			return errors.New("press: repeat needs an action other than switch_page")
+		}
+	case PressHold:
+		if b.Action == nil || (b.Action.Type != ActionShortcut && b.Action.Type != ActionPredefined) {
+			return errors.New("press: hold only works with shortcut or predefined_command actions")
+		}
+	}
+	return nil
 }
 
 type Page struct {

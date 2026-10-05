@@ -69,3 +69,34 @@ func TestActionCleanKeepsOnlyRelevantField(t *testing.T) {
 		t.Fatalf("got %+v", a)
 	}
 }
+
+func TestButtonBehaviorValidation(t *testing.T) {
+	shortcut := &Action{Type: ActionShortcut, Keys: "ctrl+m"}
+	page := &Action{Type: ActionSwitchPage, Page: PageNext}
+	cases := []struct {
+		name string
+		b    Button
+		ok   bool
+	}{
+		{"default becomes tap", Button{Action: shortcut}, true},
+		{"long press with tap", Button{Action: shortcut, LongPress: page}, true},
+		{"long press only", Button{LongPress: page}, true},
+		{"repeat shortcut", Button{Action: shortcut, Press: PressRepeat}, true},
+		{"hold shortcut", Button{Action: shortcut, Press: PressHold}, true},
+		{"repeat page switch", Button{Action: page, Press: PressRepeat}, false},
+		{"hold page switch", Button{Action: page, Press: PressHold}, false},
+		{"long press with repeat", Button{Action: shortcut, Press: PressRepeat, LongPress: page}, false},
+		{"unknown mode", Button{Action: shortcut, Press: "double"}, false},
+	}
+	for _, c := range cases {
+		err := c.b.ValidateBehavior()
+		if (err == nil) != c.ok {
+			t.Fatalf("%s: got %v", c.name, err)
+		}
+	}
+	b := Button{Action: shortcut}
+	_ = b.ValidateBehavior()
+	if b.Press != PressTap {
+		t.Fatalf("empty press must normalize to tap, got %q", b.Press)
+	}
+}

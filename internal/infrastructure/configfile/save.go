@@ -38,6 +38,8 @@ type outButton struct {
 	Icon      string        `yaml:"icon,omitempty"`
 	TextStyle *outTextStyle `yaml:"text_style,omitempty"`
 	Action    *outAction    `yaml:"action,omitempty"`
+	Press     string        `yaml:"press,omitempty"`
+	LongPress *outAction    `yaml:"long_press,omitempty"`
 }
 
 type outSmallWindow struct {
@@ -131,15 +133,10 @@ func outButtons(buttons []deck.Button) []outButton {
 				}
 			}
 		}
-		if a := b.Action; a != nil {
-			ob.Action = &outAction{
-				Type:      string(a.Type),
-				Cmd:       a.Cmd,
-				Keys:      a.Keys,
-				CommandID: a.CommandID,
-				URL:       a.URL,
-				Page:      a.Page,
-			}
+		ob.Action = toOutAction(b.Action)
+		ob.LongPress = toOutAction(b.LongPress)
+		if b.Press != "" && b.Press != deck.PressTap {
+			ob.Press = string(b.Press)
 		}
 		result = append(result, ob)
 	}
@@ -198,4 +195,18 @@ func trimExt(name string) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func toOutAction(a *deck.Action) *outAction {
+	if a == nil {
+		return nil
+	}
+	return &outAction{
+		Type:      string(a.Type),
+		Cmd:       a.Cmd,
+		Keys:      a.Keys,
+		CommandID: a.CommandID,
+		URL:       a.URL,
+		Page:      a.Page,
+	}
 }
