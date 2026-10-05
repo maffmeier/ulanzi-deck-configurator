@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/application"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
@@ -39,6 +40,7 @@ type Server struct {
 	Catalog    *catalog.Catalog
 	Metrics    *metrics.Reader
 	Connected  func() bool
+	Widgets    *application.WidgetEngine
 	Log        *slog.Logger
 }
 
@@ -60,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/small-window/preview", s.smallWindowPreview)
 	mux.HandleFunc("GET /api/temperature-sensors", s.temperatureSensors)
 	mux.HandleFunc("GET /api/predefined", s.predefined)
+	mux.HandleFunc("POST /api/render/widget", s.renderWidget)
 	mux.HandleFunc("POST /api/assets", s.uploadAsset)
 	mux.HandleFunc("GET /api/asset", s.getAsset)
 	mux.HandleFunc("GET /api/builtin-assets", s.builtinAssets)
@@ -483,4 +486,40 @@ func (s *Server) importBuiltinAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	compact := configfile.CompactPath(target)
 	writeJSON(w, http.StatusOK, map[string]string{"path": compact, "preview_url": *assetPreviewURL(compact)})
+}
+
+// renderWidget draws a widget exactly as the deck would show it, for the
+// editor preview. It shares the daemon's engine, so timers and graphs show
+// their live state.
+func (s *Server) renderWidget(w http.ResponseWriter, r *http.Request) {
+	if s.Widgets == nil {
+		writeDetail(w, http.StatusServiceUnavailable, "widget engine not available")
+		return
+	}
+	var req struct {
+		Widget     editorWidget `json:"widget"`
+		Target     string       `json:"target"`
+		Background string       `json:"background"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeDetail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	onKey := req.Target == "key"
+	widget, err := fromEditorWidget(req.Widget, onKey, s.configDir())
+	if err != nil {
+		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	bg, err := deck.NormalizeHexColor(req.Background)
+	if err != nil {
+		bg = deck.DefaultSmallWindowBg
+	}
+	width, height := deck.InfoWindowWidth, deck.InfoWindowHeight
+	if onKey {
+		width = deck.IconSize
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(s.Widgets.Render(widget, width, height, bg, time.Now()))
 }

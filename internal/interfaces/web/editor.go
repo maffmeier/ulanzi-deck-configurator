@@ -21,6 +21,21 @@ type editorAction struct {
 	CommandID string `json:"command_id"`
 	URL       string `json:"url"`
 	Page      string `json:"page"`
+	Op        string `json:"op"`
+	Minutes   int    `json:"minutes"`
+}
+
+type editorWidget struct {
+	Type      string   `json:"type"`
+	Title     string   `json:"title"`
+	Format    string   `json:"format"`
+	Items     []string `json:"items"`
+	Cmd       string   `json:"cmd"`
+	IntervalS float64  `json:"interval_s"`
+	Metric    string   `json:"metric"`
+	Paths     []string `json:"paths"`
+	OkColor   string   `json:"ok_color"`
+	FailColor string   `json:"fail_color"`
 }
 
 type editorTextStyle struct {
@@ -42,6 +57,7 @@ type editorButton struct {
 	TextStyle  editorTextStyle `json:"text_style"`
 	Press      string          `json:"press"`
 	LongPress  *editorAction   `json:"long_press"`
+	Live       *editorWidget   `json:"live"`
 }
 
 type editorPage struct {
@@ -50,15 +66,16 @@ type editorPage struct {
 }
 
 type editorSmallWindow struct {
-	Enabled              bool     `json:"enabled"`
-	IntervalS            float64  `json:"interval_s"`
-	TimeFormat           string   `json:"time_format"`
-	ShowMetrics          bool     `json:"show_metrics"`
-	RotateEveryS         *float64 `json:"rotate_every_s"`
-	BackgroundColor      string   `json:"background_color"`
-	MetricsItems         []string `json:"metrics_items"`
-	TemperatureSensors   []string `json:"temperature_sensors"`
-	TemperatureSeparator string   `json:"temperature_separator"`
+	Enabled              bool           `json:"enabled"`
+	IntervalS            float64        `json:"interval_s"`
+	TimeFormat           string         `json:"time_format"`
+	ShowMetrics          bool           `json:"show_metrics"`
+	RotateEveryS         *float64       `json:"rotate_every_s"`
+	BackgroundColor      string         `json:"background_color"`
+	MetricsItems         []string       `json:"metrics_items"`
+	TemperatureSensors   []string       `json:"temperature_sensors"`
+	TemperatureSeparator string         `json:"temperature_separator"`
+	Widgets              []editorWidget `json:"widgets"`
 }
 
 type editorConfig struct {
@@ -168,11 +185,41 @@ func toEditorButton(b deck.Button) editorButton {
 		lp := toEditorAction(*b.LongPress)
 		eb.LongPress = &lp
 	}
+	if b.Live != nil {
+		live := toEditorWidget(*b.Live)
+		eb.Live = &live
+	}
 	return eb
 }
 
 func toEditorAction(a deck.Action) editorAction {
-	return editorAction{Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page}
+	return editorAction{Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page, Op: a.Op, Minutes: a.Minutes}
+}
+
+func toEditorWidget(w deck.Widget) editorWidget {
+	return editorWidget{
+		Type: string(w.Type), Title: w.Title, Format: w.Format, Items: nonNil(w.Items), Cmd: w.Cmd,
+		IntervalS: w.IntervalS, Metric: w.Metric, Paths: nonNil(w.Paths), OkColor: w.OkColor, FailColor: w.FailColor,
+	}
+}
+
+// fromEditorWidget converts and validates; paths stay as written and are
+// resolved by the config loader.
+func fromEditorWidget(ew editorWidget, onKey bool, baseDir string) (deck.Widget, error) {
+	w := deck.Widget{
+		Type: deck.WidgetType(ew.Type), Title: strings.TrimSpace(ew.Title), Format: ew.Format, Items: ew.Items,
+		Cmd: ew.Cmd, IntervalS: ew.IntervalS, Metric: ew.Metric, OkColor: ew.OkColor, FailColor: ew.FailColor,
+	}
+	for _, p := range ew.Paths {
+		if p = strings.TrimSpace(p); p != "" {
+			w.Paths = append(w.Paths, p)
+			w.ResolvedPaths = append(w.ResolvedPaths, configfile.ResolvePath(p, baseDir))
+		}
+	}
+	if err := w.Normalize(onKey); err != nil {
+		return w, err
+	}
+	return w.Clean(), nil
 }
 
 // fromEditorAction returns nil for "none"; only the type's own field is kept.
@@ -187,6 +234,8 @@ func fromEditorAction(ea editorAction) (*deck.Action, error) {
 		CommandID: ea.CommandID,
 		URL:       ea.URL,
 		Page:      ea.Page,
+		Op:        ea.Op,
+		Minutes:   ea.Minutes,
 	}
 	if err := a.Validate(); err != nil {
 		return nil, err
@@ -211,6 +260,7 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 			RotateEveryS:         cfg.SmallWindow.RotateEveryS,
 			BackgroundColor:      cfg.SmallWindow.BackgroundColor,
 			MetricsItems:         nonNil(cfg.SmallWindow.MetricsItems),
+			Widgets:              toEditorWidgets(cfg.SmallWindow.Widgets),
 			TemperatureSensors:   nonNil(cfg.SmallWindow.TemperatureSensors),
 			TemperatureSeparator: cfg.SmallWindow.TemperatureSeparator,
 		},
@@ -226,6 +276,14 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 		ec.FixedButtons = append(ec.FixedButtons, toEditorButton(b))
 	}
 	return ec
+}
+
+func toEditorWidgets(ws []deck.Widget) []editorWidget {
+	out := []editorWidget{}
+	for _, w := range ws {
+		out = append(out, toEditorWidget(w))
+	}
+	return out
 }
 
 func nonNil(s []string) []string {
@@ -297,6 +355,13 @@ func fromEditorButtons(buttons []editorButton, scope string, skip map[int]bool) 
 			}
 		}
 		b.Press = deck.PressMode(eb.Press)
+		if eb.Live != nil && eb.Live.Type != "" && eb.Live.Type != "none" && eb.Index != deck.InfoWindowIndex {
+			live, err := fromEditorWidget(*eb.Live, true, "")
+			if err != nil {
+				return nil, fmt.Errorf("%s, Live-Anzeige: %w", where, err)
+			}
+			b.Live = &live
+		}
 		if err := b.ValidateBehavior(); err != nil {
 			return nil, fmt.Errorf("%s: %w", where, err)
 		}
@@ -367,6 +432,13 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 	}
 	if cfg.SmallWindow.IntervalS == 0 {
 		cfg.SmallWindow.IntervalS = 2
+	}
+	for i, ew := range sw.Widgets {
+		w, err := fromEditorWidget(ew, false, "")
+		if err != nil {
+			return nil, fmt.Errorf("Infofenster, Widget %d: %w", i+1, err)
+		}
+		cfg.SmallWindow.Widgets = append(cfg.SmallWindow.Widgets, w)
 	}
 	return configfile.Marshal(cfg)
 }

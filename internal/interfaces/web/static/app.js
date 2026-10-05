@@ -16,7 +16,51 @@ const ACTION_LABELS = Object.freeze({
     url: "Website öffnen",
     switch_page: "Seite wechseln",
     predefined_command: "Systemfunktion",
+    timer: "Timer",
 });
+
+const TIMER_OPS = Object.freeze([
+    { id: "toggle", label: "Starten / Pausieren" },
+    { id: "start", label: "Starten" },
+    { id: "pause", label: "Pausieren" },
+    { id: "reset", label: "Zurücksetzen" },
+]);
+
+const WIDGET_TYPES = Object.freeze([
+    { id: "clock", label: "Uhr" },
+    { id: "metrics", label: "Messwerte" },
+    { id: "command", label: "Befehlsausgabe" },
+    { id: "graph", label: "Verlaufsgrafik" },
+    { id: "image", label: "Bild / Diashow", infoOnly: true },
+    { id: "timer", label: "Timer" },
+    { id: "media", label: "Medien (läuft gerade)" },
+]);
+
+const GRAPH_METRICS = Object.freeze([
+    { id: "cpu", label: "CPU" },
+    { id: "memory", label: "Arbeitsspeicher" },
+    { id: "network", label: "Netzwerk" },
+]);
+
+function emptyWidget(type = "none") {
+    return {
+        type,
+        title: "",
+        format: "%H:%M",
+        items: type === "metrics" ? ["cpu", "memory"] : [],
+        cmd: "",
+        interval_s: 5,
+        metric: "cpu",
+        paths: [],
+        ok_color: "",
+        fail_color: "",
+    };
+}
+
+function normalizeWidget(raw) {
+    if (!raw) return emptyWidget();
+    return { ...emptyWidget(raw.type), ...raw, items: raw.items || [], paths: raw.paths || [] };
+}
 
 const ACTION_ICONS = Object.freeze({
     shell: "fa:solid:terminal",
@@ -42,6 +86,23 @@ const BASE_GROUPS = Object.freeze([
         items: [
             { id: "page-next", label: "Nächste Seite", icon: "fa:solid:arrow-right", hint: "Blättert zur nächsten Seite", action: { type: "switch_page", page: "@next" }, title: "Weiter →" },
             { id: "page-prev", label: "Vorherige Seite", icon: "fa:solid:arrow-left", hint: "Blättert zur vorherigen Seite", action: { type: "switch_page", page: "@prev" }, title: "← Zurück" },
+        ],
+    },
+    {
+        name: "Timer",
+        items: [
+            { id: "timer-toggle", label: "Timer starten / pausieren", icon: "fa:solid:stopwatch", hint: "Startet oder pausiert den Countdown (25 min)", action: { type: "timer", op: "toggle", minutes: 25 }, live: { type: "timer" } },
+            { id: "timer-reset", label: "Timer zurücksetzen", icon: "fa:solid:rotate-left", hint: "Setzt den Countdown zurück", action: { type: "timer", op: "reset" }, title: "Reset" },
+        ],
+    },
+    {
+        name: "Anzeigen",
+        items: [
+            { id: "live-clock", label: "Uhr", icon: "fa:solid:clock", hint: "Live-Anzeige: Uhrzeit auf der Taste", live: { type: "clock", format: "%H:%M" } },
+            { id: "live-timer", label: "Timer-Anzeige", icon: "fa:solid:hourglass-half", hint: "Live-Anzeige: Restzeit des Timers", live: { type: "timer" } },
+            { id: "live-cpu", label: "CPU-Verlauf", icon: "fa:solid:chart-line", hint: "Live-Anzeige: CPU-Last der letzten Minute", live: { type: "graph", metric: "cpu" } },
+            { id: "live-media", label: "Läuft gerade", icon: "fa:solid:music", hint: "Live-Anzeige: Cover des laufenden Titels", live: { type: "media" } },
+            { id: "live-command", label: "Befehlsausgabe", icon: "fa:solid:terminal", hint: "Live-Anzeige: Ausgabe eines Befehls", live: { type: "command" } },
         ],
     },
 ]);
@@ -77,7 +138,7 @@ const KEY_NAMES = Object.freeze({
 });
 
 function emptyAction() {
-    return { type: "none", cmd: "", keys: "", command_id: "", url: "", page: "" };
+    return { type: "none", cmd: "", keys: "", command_id: "", url: "", page: "", op: "toggle", minutes: 25 };
 }
 
 function normalizeButton(raw) {
@@ -90,6 +151,7 @@ function normalizeButton(raw) {
         text_style: { ...DEFAULT_STYLE, ...(raw.text_style || {}) },
         press: raw.press || "tap",
         long_press: { ...emptyAction(), ...(raw.long_press || {}) },
+        live: normalizeWidget(raw.live),
     };
 }
 
@@ -102,6 +164,7 @@ const PRESS_MODES = Object.freeze([
 function isEmptyButton(b) {
     return !b.label && !b.icon_path && (!b.action || b.action.type === "none") &&
         (!b.long_press || b.long_press.type === "none") &&
+        (!b.live || b.live.type === "none") &&
         JSON.stringify({ ...DEFAULT_STYLE, ...b.text_style }).toLowerCase() === JSON.stringify(DEFAULT_STYLE).toLowerCase();
 }
 
@@ -111,7 +174,9 @@ function iconUrl(assetId) {
 
 window.deckApp = function deckApp() {
     return {
-        INFO_INDEX, ACTION_LABELS, FONTS, METRICS, PRESS_MODES,
+        INFO_INDEX, ACTION_LABELS, FONTS, METRICS, PRESS_MODES, TIMER_OPS, WIDGET_TYPES, GRAPH_METRICS,
+        previews: {},
+        widgetFields: "",
         predefined: [],
         slots: SLOTS,
         editor: null,
@@ -132,8 +197,10 @@ window.deckApp = function deckApp() {
         shellPlaceholder: navigator.platform.startsWith("Win") ? "z.B. start notepad" : "z.B. swaymsg exec alacritty",
 
         async init() {
+            this.widgetFields = document.getElementById("tpl-widget-fields").innerHTML;
             await Promise.all([this.load(), this.loadPredefined()]);
             this.pollHealth();
+            this.pollWidgetPreviews();
             this.pollPreview();
             this.loadSensors();
             window.addEventListener("beforeunload", (e) => {
@@ -182,6 +249,7 @@ window.deckApp = function deckApp() {
                     rotate_every_s: sw.rotate_every_s ?? null,
                     background_color: sw.background_color || "#000000",
                     metrics_items: sw.metrics_items || [],
+                    widgets: (sw.widgets || []).map(normalizeWidget),
                     temperature_sensors: sw.temperature_sensors || [],
                     temperature_separator: sw.temperature_separator === "|" ? "|" : " ",
                 },
@@ -205,6 +273,7 @@ window.deckApp = function deckApp() {
                 text_style: { ...b.text_style, font_size: Number(b.text_style.font_size) },
                 press: b.press || "tap",
                 long_press: b.press === "tap" && b.long_press?.type !== "none" ? b.long_press : null,
+                live: b.live && b.live.type !== "none" ? { ...b.live, interval_s: Number(b.live.interval_s) } : null,
             }));
         },
 
@@ -217,6 +286,7 @@ window.deckApp = function deckApp() {
                 fixed_buttons: this.serializeButtons(this.editor.fixed_buttons),
                 small_window: {
                     ...sw,
+                    widgets: sw.widgets.map((w) => ({ ...w, interval_s: Number(w.interval_s) })),
                     interval_s: Number(sw.interval_s),
                     rotate_every_s: sw.rotate_every_s === null || sw.rotate_every_s === "" ? null : Number(sw.rotate_every_s),
                 },
@@ -258,6 +328,7 @@ window.deckApp = function deckApp() {
             const a = this.cur.action;
             if (a.type === "switch_page" && !a.page) a.page = "@next";
             if (a.type === "predefined_command" && !a.command_id) a.command_id = this.predefined[0]?.id || "";
+            if (a.type === "timer" && !a.op) a.op = "toggle";
             if (!this.pressModeAllowed(this.cur.press)) this.cur.press = "tap";
             this.markDirty();
         },
@@ -274,6 +345,7 @@ window.deckApp = function deckApp() {
             const a = this.cur.long_press;
             if (a.type === "switch_page" && !a.page) a.page = "@next";
             if (a.type === "predefined_command" && !a.command_id) a.command_id = this.predefined[0]?.id || "";
+            if (a.type === "timer" && !a.op) a.op = "toggle";
             this.markDirty();
         },
 
@@ -481,6 +553,7 @@ window.deckApp = function deckApp() {
                 case "url": return `Website: ${a.url}`;
                 case "switch_page": return a.page === "@next" ? "Nächste Seite" : a.page === "@prev" ? "Vorherige Seite" : `Seite: ${a.page}`;
                 case "predefined_command": return this.predefined.find((p) => p.id === a.command_id)?.label || a.command_id;
+                case "timer": return `Timer: ${TIMER_OPS.find((o) => o.id === a.op)?.label || a.op}${a.minutes ? ` (${a.minutes} min)` : ""}`;
             }
             return "";
         },
@@ -489,6 +562,9 @@ window.deckApp = function deckApp() {
             if (!action) return "";
             if (action.type === "predefined_command") {
                 return iconUrl(this.predefined.find((p) => p.id === action.command_id)?.icon || ACTION_ICONS.predefined_command);
+            }
+            if (action.type === "timer") {
+                return iconUrl(action.op === "reset" ? "fa:solid:rotate-left" : "fa:solid:stopwatch");
             }
             if (action.type === "switch_page") {
                 return iconUrl(action.page === "@prev" ? "fa:solid:arrow-left" : action.page === "@next" ? "fa:solid:arrow-right" : "fa:solid:layer-group");
@@ -587,8 +663,7 @@ window.deckApp = function deckApp() {
                 hint: `Springt zur Seite ${name}`, action: { type: "switch_page", page: name }, title: name,
             }));
             const groups = [
-                BASE_GROUPS[0],
-                { ...BASE_GROUPS[1], items: [...BASE_GROUPS[1].items, ...pageItems] },
+                ...BASE_GROUPS.map((g) => (g.name === "Navigation" ? { ...g, items: [...g.items, ...pageItems] } : g)),
                 ...this.predefinedGroups().map((g) => ({
                     name: g.name,
                     items: g.items.map((p) => ({
@@ -690,6 +765,20 @@ window.deckApp = function deckApp() {
 
         async applyPreset(index, preset) {
             const b = this.ensureButton(index);
+            if (preset.live && !preset.action) {
+                if (index === INFO_INDEX) {
+                    this.editor.small_window.widgets.push(normalizeWidget(preset.live));
+                    this.editor.small_window.enabled = true;
+                } else {
+                    b.live = normalizeWidget(preset.live);
+                }
+                this.selected = index;
+                this.markDirty();
+                return;
+            }
+            if (preset.live && index !== INFO_INDEX && (!b.live || b.live.type === "none")) {
+                b.live = normalizeWidget(preset.live);
+            }
             b.action = { ...emptyAction(), ...preset.action };
             const type = b.action.type;
             if ((b.press === "hold" && type !== "shortcut" && type !== "predefined_command") ||
@@ -783,6 +872,118 @@ window.deckApp = function deckApp() {
         async useCatalogIcon(icon) {
             await this.importIcon(this.ensureButton(this.selected), icon.asset_id);
             this.catalog.open = false;
+        },
+
+        // ───────────── Widgets ─────────────
+
+        widgetTypes(onKey) {
+            return WIDGET_TYPES.filter((t) => !(onKey && t.infoOnly));
+        },
+
+        addWidget(type) {
+            if (!type) return;
+            this.editor.small_window.widgets.push(emptyWidget(type));
+            this.editor.small_window.enabled = true;
+            this.markDirty();
+        },
+
+        moveWidget(i, delta) {
+            const list = this.editor.small_window.widgets;
+            const j = i + delta;
+            if (j < 0 || j >= list.length) return;
+            [list[i], list[j]] = [list[j], list[i]];
+            this.markDirty();
+        },
+
+        removeWidget(i) {
+            this.editor.small_window.widgets.splice(i, 1);
+            this.markDirty();
+        },
+
+        setLive(type) {
+            this.cur.live = emptyWidget(type);
+            this.markDirty();
+        },
+
+        toggleWidgetItem(w, id) {
+            w.items = w.items.includes(id) ? w.items.filter((x) => x !== id) : [...w.items, id].slice(0, 3);
+            this.markDirty();
+        },
+
+        setWidgetPaths(w, text) {
+            w.paths = text.split("\n").map((p) => p.trim()).filter(Boolean);
+            this.markDirty();
+        },
+
+        async uploadWidgetImage(w, file) {
+            if (!file) return;
+            const form = new FormData();
+            form.append("file", file);
+            try {
+                const res = await fetch("/api/assets", { method: "POST", body: form });
+                const payload = await res.json();
+                if (!res.ok) throw new Error(payload.detail || "Upload fehlgeschlagen");
+                w.paths = [...w.paths, payload.path];
+                this.markDirty();
+            } catch (err) {
+                this.toast(err.message, "err");
+            }
+        },
+
+        // Mirrors the daemon's rotation so the preview shows the same widget.
+        activeInfoWidget() {
+            const list = this.editor?.small_window.widgets || [];
+            if (!list.length) return null;
+            const rotate = Number(this.editor.small_window.rotate_every_s) || 10;
+            return list.length === 1 ? list[0] : list[Math.floor(Date.now() / 1000 / rotate) % list.length];
+        },
+
+        // Incomplete widgets would only produce validation errors.
+        renderable(w) {
+            if (w.type === "command") return w.cmd.trim() !== "";
+            if (w.type === "image") return w.paths.length > 0;
+            if (w.type === "metrics") return w.items.length > 0;
+            return w.type !== "none";
+        },
+
+        async renderPreview(key, widget, target, background) {
+            if (!this.renderable(widget)) return;
+            try {
+                const res = await fetch("/api/render/widget", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ widget: { ...widget, interval_s: Number(widget.interval_s) || 5 }, target, background }),
+                });
+                if (!res.ok) return;
+                const url = URL.createObjectURL(await res.blob());
+                const old = this.previews[key];
+                this.previews = { ...this.previews, [key]: url };
+                if (old) URL.revokeObjectURL(old);
+            } catch (_err) { /* preview is best effort */ }
+        },
+
+        async pollWidgetPreviews() {
+            if (this.editor) {
+                const jobs = [];
+                const info = this.activeInfoWidget();
+                if (info && this.editor.small_window.enabled) {
+                    jobs.push(this.renderPreview("info", info, "info", this.editor.small_window.background_color));
+                }
+                this.editor.small_window.widgets.forEach((w, i) =>
+                    jobs.push(this.renderPreview(`widget-${i}`, w, "info", this.editor.small_window.background_color)));
+                for (const slot of SLOTS) {
+                    const b = slot.index === INFO_INDEX ? null : this.button(slot.index);
+                    if (b?.live && b.live.type !== "none") {
+                        jobs.push(this.renderPreview(`key-${slot.index}`, b.live, "key", b.text_style.background_color));
+                    }
+                }
+                await Promise.all(jobs);
+            }
+            setTimeout(() => this.pollWidgetPreviews(), 2000);
+        },
+
+        hasLive(b) {
+            return b?.live && b.live.type !== "none";
         },
 
         // ───────────── Infofenster ─────────────

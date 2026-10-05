@@ -13,6 +13,9 @@ Abhängigkeiten.
   solange gehalten, oder Kürzel gedrückt halten (Push-to-Talk)
 - Infofenster: Uhr, CPU/RAM der Firmware oder eigene Messwerte
   (CPU, RAM, GPU, Temperatur, Festplatte, Netzwerk, Akku)
+- Widgets im Infofenster und als Live-Anzeige auf Tasten: Befehlsausgabe
+  (mit Farbe je Exit-Code), Verlaufsgrafik, Bild/Diashow, Timer,
+  „läuft gerade“ mit Cover
 - Web-Editor im Stil der Stream-Deck-Software mit Drag & Drop und
   eingebautem Icon-Katalog (Font Awesome Free + Twemoji)
 - Tray-Icon, Autostart, automatische Wiederverbindung nach dem Abstecken
@@ -99,6 +102,43 @@ Mit `long_press` löst ein kurzer Druck die normale Aktion beim Loslassen
 aus. `press: hold` funktioniert nur mit Tastenkürzeln; unter Wayland braucht
 es einen wlroots-Compositor, GNOME und KDE bieten die nötige Schnittstelle
 nicht.
+
+### Widgets
+
+Statt der Firmware-Anzeige kann die App das Infofenster selbst rendern und
+mehrere Widgets im Wechsel zeigen; jede Taste kann ein Widget als
+Live-Anzeige tragen.
+
+```yaml
+small_window:
+  enabled: true
+  rotate_every_s: 8
+  widgets:
+    - {type: clock, format: '%H:%M'}
+    - {type: command, title: Wetter, cmd: "curl -s 'wttr.in/Berlin?format=3'", interval_s: 600}
+    - {type: graph, metric: cpu}            # cpu | memory | network
+    - {type: image, paths: [~/bilder/a.png, ~/bilder/b.png], interval_s: 5}
+    - {type: timer, title: Pomodoro}
+    - {type: media}                         # Titel, Interpret, Cover
+pages:
+  main:
+    buttons:
+      - index: 0                            # rot, solange das Mikrofon stumm ist
+        live:
+          type: command
+          cmd: "pactl get-source-mute @DEFAULT_SOURCE@ | grep -q no && echo MIC"
+          ok_color: '#14532D'
+          fail_color: '#B91C1C'
+      - index: 1                            # Timer starten/pausieren und anzeigen
+        action: {type: timer, op: toggle, minutes: 25}   # toggle | start | pause | reset
+        live: {type: timer}
+```
+
+Befehle laufen mit der Shell des Systems (`sh` bzw. `cmd`), höchstens 10 s,
+die ersten vier Zeilen der Ausgabe werden angezeigt. „Läuft gerade“ nutzt
+unter Linux MPRIS (Spotify, Firefox, VLC, …), unter Windows die System Media
+Transport Controls (alles, was im Lautstärke-Overlay erscheint) und unter
+macOS Spotify bzw. die Musik-App.
 
 ## Plattformhinweise
 

@@ -91,28 +91,34 @@
 
             <template x-if="slot.kind === 'info'">
               <div class="info-face" :style="`background:${editor.small_window.background_color}`">
+                <template x-if="editor.small_window.enabled && editor.small_window.widgets.length && previews.info">
+                  <img class="widget-img" :src="previews.info" alt="" draggable="false" />
+                </template>
                 <template x-if="!editor.small_window.enabled">
                   <span class="info-off">Infofenster aus</span>
                 </template>
-                <template x-if="editor.small_window.enabled && infoShowsStats()">
+                <template x-if="editor.small_window.enabled && !editor.small_window.widgets.length && infoShowsStats()">
                   <div class="info-stats">
                     <template x-for="line in infoStatLines()" :key="line.label">
                       <div><span x-text="line.label"></span><b x-text="line.value"></b></div>
                     </template>
                   </div>
                 </template>
-                <template x-if="editor.small_window.enabled && !infoShowsStats()">
+                <template x-if="editor.small_window.enabled && !editor.small_window.widgets.length && !infoShowsStats()">
                   <div class="info-clock" :style="`--chars:${Math.max(5, (preview.time_text || '').length)}`" x-text="preview.time_text"></div>
                 </template>
               </div>
             </template>
 
             <template x-if="slot.kind !== 'info'">
-              <div class="key-face" :style="faceStyle(button(slot.index))">
-                <template x-if="button(slot.index)?.preview_url">
+              <div class="key-face" :class="{ live: hasLive(button(slot.index)) }" :style="faceStyle(button(slot.index))">
+                <template x-if="hasLive(button(slot.index)) && previews['key-' + slot.index]">
+                  <img :src="previews['key-' + slot.index]" alt="" draggable="false" />
+                </template>
+                <template x-if="!hasLive(button(slot.index)) && button(slot.index)?.preview_url">
                   <img :src="button(slot.index).preview_url" alt="" draggable="false" />
                 </template>
-                <template x-if="!button(slot.index)?.preview_url && button(slot.index)?.label">
+                <template x-if="!hasLive(button(slot.index)) && !button(slot.index)?.preview_url && button(slot.index)?.label">
                   <span class="key-label" :style="labelStyle(button(slot.index))" x-text="button(slot.index).label"></span>
                 </template>
               </div>
@@ -267,6 +273,16 @@
             </label>
           </template>
 
+          <template x-if="cur.action.type === 'timer'">
+            <div class="row">
+              <label class="field"><span>Timer</span>
+                <select x-model="cur.action.op" @change="markDirty()">
+                  <template x-for="o in TIMER_OPS" :key="o.id"><option :value="o.id" x-text="o.label" :selected="o.id === cur.action.op"></option></template>
+                </select></label>
+              <label class="field"><span>Dauer (min)</span>
+                <input type="number" min="0" max="1440" x-model.number="cur.action.minutes" @input="markDirty()" /></label>
+            </div>
+          </template>
           <div class="behavior">
             <label class="field">
               <span>Beim Halten</span>
@@ -309,6 +325,12 @@
                       <template x-for="name in pageNames()" :key="name"><option :value="name" x-text="'Seite: ' + name"></option></template>
                     </select></label>
                 </template>
+                <template x-if="cur.long_press.type === 'timer'">
+                  <label class="field"><span>Timer</span>
+                    <select x-model="cur.long_press.op" @change="markDirty()">
+                      <template x-for="o in TIMER_OPS" :key="o.id"><option :value="o.id" x-text="o.label" :selected="o.id === cur.long_press.op"></option></template>
+                    </select></label>
+                </template>
                 <template x-if="cur.long_press.type === 'predefined_command'">
                   <label class="field"><span>Funktion</span>
                     <select x-model="cur.long_press.command_id" @change="markDirty()">
@@ -324,6 +346,19 @@
               </div>
             </template>
             <p class="hint" x-show="cur.press === 'tap' && cur.long_press.type !== 'none'">Kurz drücken löst die Aktion oben aus, beim Loslassen. Ab 0,5 s Halten nur die Aktion für den langen Druck.</p>
+          </div>
+
+          <div class="behavior">
+            <label class="field">
+              <span>Live-Anzeige (ersetzt Bild und Titel)</span>
+              <select :value="cur.live.type" @change="setLive($event.target.value)">
+                <option value="none">Keine</option>
+                <template x-for="t in widgetTypes(true)" :key="t.id"><option :value="t.id" x-text="t.label" :selected="t.id === cur.live.type"></option></template>
+              </select>
+            </label>
+            <template x-for="w in (cur.live.type !== 'none' ? [cur.live] : [])" :key="'live-' + selected">
+              <div class="widget-fields" x-html="widgetFields"></div>
+            </template>
           </div>
 
           <details class="text-style" :open="!cur.preview_url">
@@ -362,7 +397,7 @@
             </button>
           </div>
           <div class="row">
-            <label class="field">
+            <label class="field" x-show="!editor.small_window.widgets.length">
               <span>Anzeige</span>
               <select :value="infoMode()" @change="setInfoMode($event.target.value)" :disabled="!editor.small_window.enabled">
                 <option value="clock">Uhr</option>
@@ -370,11 +405,11 @@
                 <option value="rotate">Uhr und Statistik im Wechsel</option>
               </select>
             </label>
-            <label class="field" x-show="infoMode() === 'rotate'">
+            <label class="field" x-show="!editor.small_window.widgets.length && infoMode() === 'rotate'">
               <span>Wechsel alle (s)</span>
               <input type="number" min="1" step="1" x-model.number="editor.small_window.rotate_every_s" @input="markDirty()" />
             </label>
-            <label class="field">
+            <label class="field" x-show="!editor.small_window.widgets.length">
               <span>Zeitformat</span>
               <input type="text" class="mono" x-model="editor.small_window.time_format" @input="markDirty()" placeholder="%H:%M" />
             </label>
@@ -392,7 +427,36 @@
             </label>
           </div>
 
-          <div class="field">
+          <div class="widgets">
+            <div class="widgets-head">
+              <span>Widgets</span>
+              <select @change="addWidget($event.target.value); $event.target.value = ''">
+                <option value="">+ Widget hinzufügen …</option>
+                <template x-for="t in widgetTypes(false)" :key="t.id"><option :value="t.id" x-text="t.label"></option></template>
+              </select>
+              <label class="field inline" x-show="editor.small_window.widgets.length > 1">
+                <span>Wechsel alle (s)</span>
+                <input type="number" min="1" step="1" x-model.number="editor.small_window.rotate_every_s" @input="markDirty()" />
+              </label>
+            </div>
+            <p class="hint" x-show="!editor.small_window.widgets.length">Ohne Widgets zeigt die Firmware Uhr oder CPU/RAM (Einstellungen unten). Mit Widgets rendert die App das Infofenster selbst – z.B. Befehlsausgaben, Verlaufsgrafiken, Bilder, Timer oder den laufenden Titel.</p>
+            <template x-for="(w, i) in editor.small_window.widgets" :key="i">
+              <div class="widget-card">
+                <img class="widget-thumb" :src="previews['widget-' + i]" x-show="previews['widget-' + i]" alt="" />
+                <div class="widget-body">
+                  <div class="widget-title">
+                    <b x-text="(i + 1) + '. ' + (WIDGET_TYPES.find((t) => t.id === w.type)?.label || w.type)"></b>
+                    <button class="icon-btn" @click="moveWidget(i, -1)" :disabled="i === 0" title="Nach vorne">↑</button>
+                    <button class="icon-btn" @click="moveWidget(i, 1)" :disabled="i === editor.small_window.widgets.length - 1" title="Nach hinten">↓</button>
+                    <button class="icon-btn danger" @click="removeWidget(i)" title="Entfernen">✕</button>
+                  </div>
+                  <div class="widget-fields" x-html="widgetFields"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="field" x-show="!editor.small_window.widgets.length">
             <span>Eigene Messwerte statt Firmware-Anzeige (bis zu 3)</span>
             <div class="chips">
               <template x-for="m in METRICS" :key="m.id">
@@ -403,7 +467,7 @@
             </div>
           </div>
 
-          <div class="field" x-show="editor.small_window.metrics_items.includes('temperature') && sensors.length">
+          <div class="field" x-show="!editor.small_window.widgets.length && editor.small_window.metrics_items.includes('temperature') && sensors.length">
             <span>Temperatursensoren (bis zu 3, in dieser Reihenfolge)</span>
             <div class="chips">
               <template x-for="s in sensors" :key="s.id">
@@ -438,6 +502,16 @@
                   </optgroup>
                 </template>
               </select></label>
+          </template>
+          <template x-if="cur.action.type === 'timer'">
+            <div class="row">
+              <label class="field"><span>Timer</span>
+                <select x-model="cur.action.op" @change="markDirty()">
+                  <template x-for="o in TIMER_OPS" :key="o.id"><option :value="o.id" x-text="o.label" :selected="o.id === cur.action.op"></option></template>
+                </select></label>
+              <label class="field"><span>Dauer (min)</span>
+                <input type="number" min="0" max="1440" x-model.number="cur.action.minutes" @input="markDirty()" /></label>
+            </div>
           </template>
           <template x-if="cur.action.type === 'switch_page'">
             <label class="field"><span>Ziel</span>
@@ -487,6 +561,65 @@
     <div class="toast" :class="t.kind" x-text="t.text" x-transition></div>
   </template>
 </div>
+
+<!-- Fields of one widget; rendered via x-html where `w` is in scope. -->
+<template id="tpl-widget-fields">
+  <div class="row">
+    <template x-if="w.type !== 'media' && w.type !== 'image'">
+      <label class="field"><span>Überschrift</span>
+        <input type="text" x-model="w.title" @input="markDirty()" placeholder="optional" /></label>
+    </template>
+    <template x-if="w.type === 'clock'">
+      <label class="field"><span>Format</span>
+        <input type="text" class="mono" x-model="w.format" @input="markDirty()" placeholder="%H:%M" /></label>
+    </template>
+    <template x-if="w.type === 'graph'">
+      <label class="field"><span>Wert</span>
+        <select x-model="w.metric" @change="markDirty()">
+          <template x-for="m in GRAPH_METRICS" :key="m.id"><option :value="m.id" x-text="m.label" :selected="m.id === w.metric"></option></template>
+        </select></label>
+    </template>
+    <template x-if="w.type === 'command' || w.type === 'image'">
+      <label class="field"><span x-text="w.type === 'image' ? 'Bildwechsel alle (s)' : 'Aktualisieren alle (s)'"></span>
+        <input type="number" min="0.5" step="0.5" x-model.number="w.interval_s" @input="markDirty()" /></label>
+    </template>
+  </div>
+  <template x-if="w.type === 'metrics'">
+    <div class="chips">
+      <template x-for="m in METRICS" :key="m.id">
+        <button class="chip" :class="{ on: w.items.includes(m.id) }"
+                :disabled="!w.items.includes(m.id) && w.items.length >= 3"
+                @click="toggleWidgetItem(w, m.id)" x-text="m.label"></button>
+      </template>
+    </div>
+  </template>
+  <template x-if="w.type === 'command'">
+    <div class="widget-command">
+      <label class="field"><span>Befehl (Ausgabe wird angezeigt, max. 4 Zeilen)</span>
+        <input type="text" class="mono" x-model="w.cmd" @input="markDirty()" placeholder="z.B. curl -s 'wttr.in/Berlin?format=3'" /></label>
+      <div class="row">
+        <label class="check"><input type="checkbox" :checked="!!w.ok_color" @change="w.ok_color = $event.target.checked ? '#14532D' : ''; markDirty()" /> Farbe bei Erfolg (Exit 0)</label>
+        <input type="color" x-show="w.ok_color" x-model="w.ok_color" @input="markDirty()" />
+        <label class="check"><input type="checkbox" :checked="!!w.fail_color" @change="w.fail_color = $event.target.checked ? '#B91C1C' : ''; markDirty()" /> Farbe bei Fehler</label>
+        <input type="color" x-show="w.fail_color" x-model="w.fail_color" @input="markDirty()" />
+      </div>
+    </div>
+  </template>
+  <template x-if="w.type === 'image'">
+    <div class="widget-command">
+      <label class="field"><span>Bilder (ein Pfad pro Zeile)</span>
+        <textarea class="mono" rows="3" :value="w.paths.join('\n')" @change="setWidgetPaths(w, $event.target.value)"></textarea></label>
+      <label class="upload-btn">Bild hinzufügen …
+        <input type="file" accept="image/*" hidden @change="uploadWidgetImage(w, $event.target.files[0]); $event.target.value = ''" /></label>
+    </div>
+  </template>
+  <template x-if="w.type === 'timer'">
+    <p class="hint">Zeigt den Countdown. Steuern lässt er sich über die Aktion „Timer“ auf einer Taste.</p>
+  </template>
+  <template x-if="w.type === 'media'">
+    <p class="hint">Zeigt Titel, Interpret und Cover des laufenden Players (Linux: MPRIS, z.B. Spotify, Firefox, VLC; macOS: Spotify oder Musik).</p>
+  </template>
+</template>
 
 <script src="/static/app.js"></script>
 <script src="/static/alpine.min.js" defer></script>
