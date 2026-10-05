@@ -222,7 +222,8 @@ func runCommand(args []string) error {
 	defer cancel()
 
 	dev := d200.NewDevice(d200.OpenHID, log.With("component", "deck"))
-	daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, cfg, log.With("component", "daemon"))
+	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner}, render.Renderer{}, log.With("component", "widgets"))
+	daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, engine, cfg, log.With("component", "daemon"))
 
 	go dev.Run(ctx)
 	go daemon.Run(ctx)
@@ -234,6 +235,7 @@ func runCommand(args []string) error {
 		Catalog:    cat,
 		Metrics:    reader,
 		Connected:  dev.Connected,
+		Widgets:    engine,
 		Log:        log.With("component", "web"),
 	}
 	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second}

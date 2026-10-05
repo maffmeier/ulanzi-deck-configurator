@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"fmt"
+	"image"
 	"log/slog"
 	"sync"
 	"testing"
@@ -14,6 +16,7 @@ type fakeDeck struct {
 	mu        sync.Mutex
 	events    chan deck.Event
 	uploads   [][]deck.Button
+	partials  [][]deck.Button
 	modes     []deck.SmallWindowMode
 	data      int
 	keepAlive int
@@ -41,9 +44,26 @@ func (f *fakeDeck) SetButtons(b []deck.Button, partial bool) error {
 	f.mu.Lock()
 	if !partial {
 		f.uploads = append(f.uploads, b)
+	} else {
+		f.partials = append(f.partials, b)
 	}
 	f.mu.Unlock()
 	return nil
+}
+
+// partialData returns the IconData uploaded for index by partial updates.
+func (f *fakeDeck) partialData(index int) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, batch := range f.partials {
+		for _, b := range batch {
+			if b.Index == index && b.IconData != nil {
+				out = append(out, string(b.IconData))
+			}
+		}
+	}
+	return out
 }
 
 func (f *fakeDeck) lastUploadLabel(index int) string {
@@ -101,11 +121,25 @@ func (fakeMetrics) FormatTime(string) string                 { return "12:34" }
 func (fakeMetrics) CPUPercent() int                          { return 10 }
 func (fakeMetrics) MemoryPercent() int                       { return 20 }
 func (fakeMetrics) MetricValue(string) string                { return "1%" }
+func (fakeMetrics) NetworkBytesPerSec() (float64, bool)      { return 2048, true }
 func (fakeMetrics) TemperatureValue([]string, string) string { return "40C" }
 
 type fakeRenderer struct{}
 
-func (fakeRenderer) SmallWindowClock(string, time.Time) []byte  { return []byte("png") }
+func (fakeRenderer) SmallWindowClock(string, string) []byte { return []byte("png") }
+func (fakeRenderer) Text(_, _ int, bg, title string, lines []string, _ bool) []byte {
+	return []byte(fmt.Sprintf("text|%s|%s|%v", bg, title, lines))
+}
+func (fakeRenderer) Graph(_, _ int, _, title, value string, samples []float64, _ float64) []byte {
+	return []byte(fmt.Sprintf("graph|%s|%s|%d", title, value, len(samples)))
+}
+func (fakeRenderer) Timer(_, _ int, _, title, text string, _ float64, running bool) []byte {
+	return []byte(fmt.Sprintf("timer|%s|%s|%v", title, text, running))
+}
+func (fakeRenderer) Media(_, _ int, _, title, artist string, _ image.Image) []byte {
+	return []byte("media|" + title + "|" + artist)
+}
+func (fakeRenderer) Image(int, int, string, image.Image) []byte { return []byte("image") }
 func (fakeRenderer) SmallWindowMetrics(string, []string) []byte { return []byte("png") }
 
 func pagedConfig() *deck.Config {
@@ -125,7 +159,9 @@ func pagedConfig() *deck.Config {
 func startDaemon(t *testing.T, cfg *deck.Config) (*Daemon, *fakeDeck, *fakeRunner) {
 	t.Helper()
 	dev, runner := newFakeDeck(), &fakeRunner{}
-	d := NewDaemon(dev, runner, fakeMetrics{}, fakeRenderer{}, cfg, slog.New(slog.DiscardHandler))
+	log := slog.New(slog.DiscardHandler)
+	engine := NewWidgetEngine(fakeMetrics{}, &fakeSources{}, fakeRenderer{}, log)
+	d := NewDaemon(dev, runner, fakeMetrics{}, fakeRenderer{}, engine, cfg, log)
 	d.timing = pressTiming{longPress: 80 * time.Millisecond, repeatDelay: 60 * time.Millisecond, repeatInterval: 20 * time.Millisecond}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

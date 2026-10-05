@@ -151,8 +151,13 @@ func (d *Daemon) releaseAll() {
 }
 
 func (d *Daemon) execute(action deck.Action, index int, page string) {
-	if action.Type == deck.ActionSwitchPage {
+	switch action.Type {
+	case deck.ActionSwitchPage:
 		d.SwitchTo(action.Page)
+		return
+	case deck.ActionTimer:
+		d.engine.Timer(action.Op, action.Minutes, time.Now())
+		d.refreshWidgets()
 		return
 	}
 	if err := d.runner.Run(action); err != nil {

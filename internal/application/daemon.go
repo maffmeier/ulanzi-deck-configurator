@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"log/slog"
 	"sync"
 	"time"
@@ -37,11 +38,17 @@ type Metrics interface {
 	MemoryPercent() int
 	MetricValue(metric string) string
 	TemperatureValue(sensorIDs []string, separator string) string
+	NetworkBytesPerSec() (float64, bool)
 }
 
 type Renderer interface {
-	SmallWindowClock(bg string, t time.Time) []byte
+	SmallWindowClock(bg, text string) []byte
 	SmallWindowMetrics(bg string, lines []string) []byte
+	Text(w, h int, bg, title string, lines []string, mono bool) []byte
+	Graph(w, h int, bg, title, value string, samples []float64, maxValue float64) []byte
+	Timer(w, h int, bg, title, text string, progress float64, running bool) []byte
+	Media(w, h int, bg, title, artist string, cover image.Image) []byte
+	Image(w, h int, bg string, img image.Image) []byte
 }
 
 const heartbeatInterval = 2 * time.Second
@@ -63,20 +70,29 @@ type Daemon struct {
 	timing pressTiming
 	heldMu sync.Mutex
 	held   map[int]*heldKey
+
+	engine     *WidgetEngine
+	widgetKick chan struct{}
+	// liveHash remembers what each live key shows, so unchanged keys are
+	// not re-uploaded every second (guarded by mu).
+	liveHash map[int]string
 }
 
-func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, cfg *deck.Config, log *slog.Logger) *Daemon {
+func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, engine *WidgetEngine, cfg *deck.Config, log *slog.Logger) *Daemon {
 	return &Daemon{
-		dev:      dev,
-		runner:   runner,
-		metrics:  metrics,
-		renderer: renderer,
-		log:      log,
-		cfg:      cfg,
-		page:     cfg.DefaultPage,
-		wakeup:   make(chan struct{}, 1),
-		timing:   defaultPressTiming,
-		held:     map[int]*heldKey{},
+		dev:        dev,
+		runner:     runner,
+		metrics:    metrics,
+		renderer:   renderer,
+		engine:     engine,
+		liveHash:   map[int]string{},
+		log:        log,
+		cfg:        cfg,
+		page:       cfg.DefaultPage,
+		wakeup:     make(chan struct{}, 1),
+		widgetKick: make(chan struct{}, 1),
+		timing:     defaultPressTiming,
+		held:       map[int]*heldKey{},
 	}
 }
 
@@ -101,6 +117,8 @@ func (d *Daemon) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { d.eventLoop(ctx) })
 	wg.Go(func() { d.statusLoop(ctx) })
+	wg.Go(func() { d.engine.Run(ctx) })
+	wg.Go(func() { d.liveLoop(ctx) })
 	wg.Wait()
 }
 
@@ -145,10 +163,17 @@ func (d *Daemon) applyLocked() {
 // background color (the status loop draws on top of it).
 func (d *Daemon) pushPageLocked() {
 	var visible []deck.Button
+	clear(d.liveHash)
+	now := time.Now()
 	for _, b := range d.cfg.ButtonsFor(d.page) {
-		if b.Index < deck.ButtonCount {
-			visible = append(visible, b)
+		if b.Index >= deck.ButtonCount {
+			continue
 		}
+		if b.Live != nil {
+			b.IconData = d.engine.Render(*b.Live, deck.IconSize, deck.IconSize, b.TextStyle.BackgroundColor, now)
+			d.liveHash[b.Index] = pngHash(b.IconData)
+		}
+		visible = append(visible, b)
 	}
 	d.logErr("upload page", d.dev.SetButtons(visible, false))
 	info := deck.Button{Index: deck.InfoWindowIndex, TextStyle: deck.DefaultTextStyle()}
@@ -206,6 +231,8 @@ type statusState struct {
 	modeStarted time.Time
 	primed      bool
 	connected   bool
+	lastPNG     string
+	lastUpload  time.Time
 }
 
 func modePtr(m deck.SmallWindowMode) *deck.SmallWindowMode { return &m }
@@ -221,6 +248,7 @@ func (d *Daemon) statusLoop(ctx context.Context) {
 			return
 		case <-d.wakeup:
 			st = statusState{}
+		case <-d.widgetKick:
 		case <-time.After(timeout):
 		}
 	}
@@ -231,7 +259,7 @@ func strategyKey(sw deck.SmallWindow) string {
 	if sw.RotateEveryS != nil {
 		rotate = fmt.Sprint(*sw.RotateEveryS)
 	}
-	return fmt.Sprint(sw.Enabled, sw.ShowMetrics, rotate, sw.MetricsItems)
+	return fmt.Sprint(sw.Enabled, sw.ShowMetrics, rotate, sw.MetricsItems, fmt.Sprintf("%+v", sw.Widgets))
 }
 
 func seconds(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
@@ -247,6 +275,10 @@ func (d *Daemon) statusTick(st *statusState) time.Duration {
 	}
 	if !connected {
 		return heartbeatInterval
+	}
+
+	if sw.Enabled && sw.UsesWidgets() {
+		return d.widgetSmallWindow(st, sw)
 	}
 
 	if !sw.Enabled {
@@ -323,7 +355,7 @@ func (d *Daemon) customSmallWindow(st *statusState, sw deck.SmallWindow, desired
 		}
 		png = d.renderer.SmallWindowMetrics(sw.BackgroundColor, d.metricLines(sw))
 	} else {
-		png = d.renderer.SmallWindowClock(sw.BackgroundColor, now)
+		png = d.renderer.SmallWindowClock(sw.BackgroundColor, d.metrics.FormatTime(sw.TimeFormat))
 	}
 
 	d.mu.Lock()
