@@ -111,34 +111,58 @@ type input struct {
 
 var procSendInput = syscall.NewLazyDLL("user32.dll").NewProc("SendInput")
 
-func (r *Runner) sendCombo(c Combo) error {
+func keyEvent(vk uint16, up bool) input {
+	var flags uint32
+	if extendedKeys[vk] {
+		flags |= keyEventExtended
+	}
+	if up {
+		flags |= keyEventKeyUp
+	}
+	return input{typ: inputKeyboard, ki: keyboardInput{vk: vk, flags: flags}}
+}
+
+// comboEvents returns the key-down events (modifiers first) and the
+// matching key-up events in reverse order.
+func comboEvents(c Combo) (down, up []input, err error) {
 	vk, ok := virtualKey(c.Key)
 	if !ok {
-		return fmt.Errorf("key %q is not supported on Windows", c.Key)
+		return nil, nil, fmt.Errorf("key %q is not supported on Windows", c.Key)
 	}
-	event := func(vk uint16, up bool) input {
-		var flags uint32
-		if extendedKeys[vk] {
-			flags |= keyEventExtended
-		}
-		if up {
-			flags |= keyEventKeyUp
-		}
-		return input{typ: inputKeyboard, ki: keyboardInput{vk: vk, flags: flags}}
-	}
-
-	var events []input
 	for _, m := range c.Modifiers {
-		events = append(events, event(modifierKeys[m], false))
+		down = append(down, keyEvent(modifierKeys[m], false))
 	}
-	events = append(events, event(vk, false), event(vk, true))
+	down = append(down, keyEvent(vk, false))
+	up = append(up, keyEvent(vk, true))
 	for i := len(c.Modifiers) - 1; i >= 0; i-- {
-		events = append(events, event(modifierKeys[c.Modifiers[i]], true))
+		up = append(up, keyEvent(modifierKeys[c.Modifiers[i]], true))
 	}
+	return down, up, nil
+}
 
+func sendInput(events []input) error {
 	sent, _, err := procSendInput.Call(uintptr(len(events)), uintptr(unsafe.Pointer(&events[0])), unsafe.Sizeof(events[0]))
 	if int(sent) != len(events) {
 		return fmt.Errorf("SendInput delivered %d of %d events: %w", sent, len(events), err)
 	}
 	return nil
+}
+
+func (r *Runner) sendCombo(c Combo) error {
+	down, up, err := comboEvents(c)
+	if err != nil {
+		return err
+	}
+	return sendInput(append(down, up...))
+}
+
+func (r *Runner) pressCombo(c Combo) (func() error, error) {
+	down, up, err := comboEvents(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := sendInput(down); err != nil {
+		return nil, err
+	}
+	return func() error { return sendInput(up) }, nil
 }

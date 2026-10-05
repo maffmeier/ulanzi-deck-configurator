@@ -43,6 +43,34 @@ func (r *Runner) Run(action deck.Action) error {
 	return fmt.Errorf("action type %q cannot be executed by the runner", action.Type)
 }
 
+// Press holds a shortcut down until the returned release is called, for
+// push-to-talk style keys. Predefined commands must resolve to a shortcut.
+func (r *Runner) Press(action deck.Action) (func(), error) {
+	if action.Type == deck.ActionPredefined {
+		resolved, err := ResolvePredefined(action.CommandID)
+		if err != nil {
+			return nil, err
+		}
+		action = resolved
+	}
+	if action.Type != deck.ActionShortcut {
+		return nil, fmt.Errorf("holding only works with shortcuts, not %s", action.Type)
+	}
+	combo, err := ParseCombo(action.Keys)
+	if err != nil {
+		return nil, err
+	}
+	release, err := r.pressCombo(combo)
+	if err != nil {
+		return nil, err
+	}
+	return func() {
+		if err := release(); err != nil {
+			r.log.Error("releasing held shortcut failed", "keys", action.Keys, "error", err)
+		}
+	}, nil
+}
+
 var noSlashSchemes = map[string]bool{"about": true, "data": true, "file": true, "mailto": true, "sms": true, "tel": true}
 
 // NormalizeURL adds https:// to bare hosts like "claude.ai".

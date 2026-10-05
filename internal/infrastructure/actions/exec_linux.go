@@ -2,10 +2,12 @@ package actions
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // wtypeLinger keeps wtype's virtual keyboard alive after the keys were
@@ -17,11 +19,27 @@ var wtypeModifiers = map[Modifier]string{
 	ModCtrl: "ctrl", ModAlt: "alt", ModShift: "shift", ModSuper: "logo",
 }
 
-// sendCombo prefers wtype on Wayland: xdotool only reaches XWayland
-// windows there, so compositor bindings (sway, Hyprland) never fire.
+var (
+	vkOnce   sync.Once
+	sharedVK *virtualKeyboard
+)
+
+func (r *Runner) virtualKeyboard() *virtualKeyboard {
+	vkOnce.Do(func() { sharedVK = newVirtualKeyboard(r.log) })
+	return sharedVK
+}
+
+// sendCombo uses our own Wayland virtual keyboard where the compositor
+// supports it (sway, Hyprland, ...): xdotool only reaches XWayland windows
+// there. wtype remains the fallback, xdotool covers X11.
 func (r *Runner) sendCombo(c Combo) error {
 	wayland := os.Getenv("WAYLAND_DISPLAY") != ""
 	if wayland {
+		err := r.virtualKeyboard().Tap(c)
+		if err == nil {
+			return nil
+		}
+		r.log.Debug("virtual keyboard unavailable, falling back", "error", err)
 		if _, err := exec.LookPath("wtype"); err == nil {
 			// Asynchronous, so the linger delay doesn't hold up further presses.
 			return r.start("wtype", wtypeArgs(c)...)
@@ -31,9 +49,29 @@ func (r *Runner) sendCombo(c Combo) error {
 		return r.run("xdotool", "key", "--clearmodifiers", xdotoolSpec(c))
 	}
 	if wayland {
-		return errors.New("shortcut needs wtype (Wayland) or xdotool (X11)")
+		return errors.New("shortcut needs a wlroots compositor, wtype or xdotool")
 	}
 	return errors.New("shortcut needs xdotool (X11)")
+}
+
+func (r *Runner) pressCombo(c Combo) (func() error, error) {
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		release, err := r.virtualKeyboard().Press(c)
+		if err == nil {
+			return release, nil
+		}
+		if _, lookErr := exec.LookPath("xdotool"); lookErr != nil {
+			return nil, fmt.Errorf("holding keys on Wayland: %w", err)
+		}
+	}
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return nil, errors.New("holding keys needs xdotool (X11)")
+	}
+	spec := xdotoolSpec(c)
+	if err := r.run("xdotool", "keydown", spec); err != nil {
+		return nil, err
+	}
+	return func() error { return r.run("xdotool", "keyup", spec) }, nil
 }
 
 func wtypeArgs(c Combo) []string {
