@@ -177,3 +177,58 @@ func TestPressModesRoundTrip(t *testing.T) {
 		t.Fatal("hold on switch_page must fail")
 	}
 }
+
+func TestWidgetsRoundTrip(t *testing.T) {
+	text := `small_window:
+  enabled: true
+  rotate_every_s: 8
+  widgets:
+    - {type: clock, format: '%H:%M'}
+    - {type: command, title: Wetter, cmd: "curl -s wttr.in?format=3", interval_s: 600}
+    - {type: graph, metric: cpu}
+    - {type: image, paths: [icons/a.png, icons/b.png], interval_s: 3}
+    - {type: timer, title: Pomodoro}
+    - {type: media}
+buttons:
+  - index: 0
+    live: {type: command, cmd: "pactl get-source-mute @DEFAULT_SOURCE@ | grep -q no", ok_color: '#14532d', fail_color: '#b91c1c'}
+  - index: 1
+    action: {type: timer, op: toggle, minutes: 25}
+`
+	cfg, err := Parse([]byte(text), "/cfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := cfg.SmallWindow.Widgets
+	if len(w) != 6 || w[1].IntervalS != 600 || w[2].IntervalS != deck.DefaultWidgetInterval {
+		t.Fatalf("widgets %+v", w)
+	}
+	if w[3].ResolvedPaths[0] != filepath.Clean("/cfg/icons/a.png") {
+		t.Fatalf("image path %q", w[3].ResolvedPaths[0])
+	}
+	b := cfg.Pages[0].Buttons
+	if b[0].Live == nil || b[0].Live.FailColor != "#B91C1C" || b[1].Action.Op != "toggle" || b[1].Action.Minutes != 25 {
+		t.Fatalf("buttons %+v", b)
+	}
+	data, err := Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := Parse(data, "/cfg")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, data)
+	}
+	if len(again.SmallWindow.Widgets) != 6 || again.Pages[0].Buttons[0].Live == nil || again.Pages[0].Buttons[1].Action.Minutes != 25 {
+		t.Fatalf("round trip lost data:\n%s", data)
+	}
+	for _, bad := range []string{
+		"small_window: {widgets: [{type: radar}]}\nbuttons: []\n",
+		"small_window: {widgets: [{type: graph, metric: gpu}]}\nbuttons: []\n",
+		"buttons: [{index: 0, live: {type: image, paths: [a.png]}}]\n",
+		"buttons: [{index: 0, action: {type: timer, op: explode}}]\n",
+	} {
+		if _, err := Parse([]byte(bad), "."); err == nil {
+			t.Fatalf("expected error for %q", bad)
+		}
+	}
+}

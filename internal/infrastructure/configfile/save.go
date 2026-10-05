@@ -20,6 +20,21 @@ type outAction struct {
 	CommandID string `yaml:"command_id,omitempty"`
 	URL       string `yaml:"url,omitempty"`
 	Page      string `yaml:"page,omitempty"`
+	Op        string `yaml:"op,omitempty"`
+	Minutes   int    `yaml:"minutes,omitempty"`
+}
+
+type outWidget struct {
+	Type      string   `yaml:"type"`
+	Title     string   `yaml:"title,omitempty"`
+	Format    string   `yaml:"format,omitempty"`
+	Items     []string `yaml:"items,omitempty"`
+	Cmd       string   `yaml:"cmd,omitempty"`
+	IntervalS float64  `yaml:"interval_s,omitempty"`
+	Metric    string   `yaml:"metric,omitempty"`
+	Paths     []string `yaml:"paths,omitempty"`
+	OkColor   string   `yaml:"ok_color,omitempty"`
+	FailColor string   `yaml:"fail_color,omitempty"`
 }
 
 type outTextStyle struct {
@@ -40,18 +55,20 @@ type outButton struct {
 	Action    *outAction    `yaml:"action,omitempty"`
 	Press     string        `yaml:"press,omitempty"`
 	LongPress *outAction    `yaml:"long_press,omitempty"`
+	Live      *outWidget    `yaml:"live,omitempty"`
 }
 
 type outSmallWindow struct {
-	Enabled              bool     `yaml:"enabled"`
-	IntervalS            float64  `yaml:"interval_s"`
-	TimeFormat           string   `yaml:"time_format"`
-	ShowMetrics          bool     `yaml:"show_metrics"`
-	BackgroundColor      string   `yaml:"background_color"`
-	RotateEveryS         *float64 `yaml:"rotate_every_s,omitempty"`
-	MetricsItems         []string `yaml:"metrics_items,omitempty"`
-	TemperatureSensors   []string `yaml:"temperature_sensors,omitempty"`
-	TemperatureSeparator string   `yaml:"temperature_separator,omitempty"`
+	Enabled              bool        `yaml:"enabled"`
+	IntervalS            float64     `yaml:"interval_s"`
+	TimeFormat           string      `yaml:"time_format"`
+	ShowMetrics          bool        `yaml:"show_metrics"`
+	BackgroundColor      string      `yaml:"background_color"`
+	RotateEveryS         *float64    `yaml:"rotate_every_s,omitempty"`
+	MetricsItems         []string    `yaml:"metrics_items,omitempty"`
+	TemperatureSensors   []string    `yaml:"temperature_sensors,omitempty"`
+	TemperatureSeparator string      `yaml:"temperature_separator,omitempty"`
+	Widgets              []outWidget `yaml:"widgets,omitempty"`
 }
 
 type outPage struct {
@@ -86,6 +103,9 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 	if cfg.Brightness != deck.DefaultBrightness {
 		b := cfg.Brightness
 		out.Brightness = &b
+	}
+	for _, w := range cfg.SmallWindow.Widgets {
+		out.SmallWindow.Widgets = append(out.SmallWindow.Widgets, *toOutWidget(&w))
 	}
 	if cfg.SmallWindow.TemperatureSeparator != " " {
 		out.SmallWindow.TemperatureSeparator = cfg.SmallWindow.TemperatureSeparator
@@ -135,6 +155,7 @@ func outButtons(buttons []deck.Button) []outButton {
 		}
 		ob.Action = toOutAction(b.Action)
 		ob.LongPress = toOutAction(b.LongPress)
+		ob.Live = toOutWidget(b.Live)
 		if b.Press != "" && b.Press != deck.PressTap {
 			ob.Press = string(b.Press)
 		}
@@ -208,5 +229,29 @@ func toOutAction(a *deck.Action) *outAction {
 		CommandID: a.CommandID,
 		URL:       a.URL,
 		Page:      a.Page,
+		Op:        a.Op,
+		Minutes:   a.Minutes,
 	}
+}
+
+// toOutWidget omits the default interval to keep configs short.
+func toOutWidget(w *deck.Widget) *outWidget {
+	if w == nil {
+		return nil
+	}
+	ow := &outWidget{
+		Type:      string(w.Type),
+		Title:     w.Title,
+		Format:    w.Format,
+		Items:     w.Items,
+		Cmd:       w.Cmd,
+		Metric:    w.Metric,
+		Paths:     w.Paths,
+		OkColor:   w.OkColor,
+		FailColor: w.FailColor,
+	}
+	if w.IntervalS != deck.DefaultWidgetInterval {
+		ow.IntervalS = w.IntervalS
+	}
+	return ow
 }

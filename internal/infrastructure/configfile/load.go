@@ -23,6 +23,21 @@ type rawAction struct {
 	URL       string `yaml:"url"`
 	Page      string `yaml:"page"`
 	CommandID string `yaml:"command_id"`
+	Op        string `yaml:"op"`
+	Minutes   int    `yaml:"minutes"`
+}
+
+type rawWidget struct {
+	Type      string   `yaml:"type"`
+	Title     string   `yaml:"title"`
+	Format    string   `yaml:"format"`
+	Items     []string `yaml:"items"`
+	Cmd       string   `yaml:"cmd"`
+	IntervalS float64  `yaml:"interval_s"`
+	Metric    string   `yaml:"metric"`
+	Paths     []string `yaml:"paths"`
+	OkColor   string   `yaml:"ok_color"`
+	FailColor string   `yaml:"fail_color"`
 }
 
 type rawTextStyle struct {
@@ -43,18 +58,20 @@ type rawButton struct {
 	TextStyle *rawTextStyle `yaml:"text_style"`
 	Press     string        `yaml:"press"`
 	LongPress *rawAction    `yaml:"long_press"`
+	Live      *rawWidget    `yaml:"live"`
 }
 
 type rawSmallWindow struct {
-	Enabled              bool     `yaml:"enabled"`
-	IntervalS            *float64 `yaml:"interval_s"`
-	TimeFormat           *string  `yaml:"time_format"`
-	ShowMetrics          *bool    `yaml:"show_metrics"`
-	RotateEveryS         any      `yaml:"rotate_every_s"`
-	BackgroundColor      *string  `yaml:"background_color"`
-	MetricsItems         []string `yaml:"metrics_items"`
-	TemperatureSensors   []string `yaml:"temperature_sensors"`
-	TemperatureSeparator *string  `yaml:"temperature_separator"`
+	Enabled              bool        `yaml:"enabled"`
+	IntervalS            *float64    `yaml:"interval_s"`
+	TimeFormat           *string     `yaml:"time_format"`
+	ShowMetrics          *bool       `yaml:"show_metrics"`
+	RotateEveryS         any         `yaml:"rotate_every_s"`
+	BackgroundColor      *string     `yaml:"background_color"`
+	MetricsItems         []string    `yaml:"metrics_items"`
+	TemperatureSensors   []string    `yaml:"temperature_sensors"`
+	TemperatureSeparator *string     `yaml:"temperature_separator"`
+	Widgets              []rawWidget `yaml:"widgets"`
 }
 
 type rawPage struct {
@@ -91,7 +108,7 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 		cfg.Brightness = *raw.Brightness
 	}
 
-	sw, err := parseSmallWindow(raw.SmallWindow)
+	sw, err := parseSmallWindow(raw.SmallWindow, baseDir)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +153,7 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 	return cfg, nil
 }
 
-func parseSmallWindow(raw *rawSmallWindow) (deck.SmallWindow, error) {
+func parseSmallWindow(raw *rawSmallWindow, baseDir string) (deck.SmallWindow, error) {
 	sw := deck.DefaultSmallWindow()
 	if raw == nil {
 		return sw, nil
@@ -159,6 +176,9 @@ func parseSmallWindow(raw *rawSmallWindow) (deck.SmallWindow, error) {
 	}
 	sw.MetricsItems = raw.MetricsItems
 	sw.TemperatureSensors = raw.TemperatureSensors
+	for _, rw := range raw.Widgets {
+		sw.Widgets = append(sw.Widgets, toWidget(rw, baseDir))
+	}
 
 	switch v := raw.RotateEveryS.(type) {
 	case nil:
@@ -241,6 +261,10 @@ func parseButton(raw rawButton, baseDir string) (deck.Button, error) {
 		return deck.Button{}, fmt.Errorf("long_press: %w", err)
 	}
 	button.Press = deck.PressMode(raw.Press)
+	if raw.Live != nil {
+		live := toWidget(*raw.Live, baseDir)
+		button.Live = &live
+	}
 	if err := button.ValidateBehavior(); err != nil {
 		return deck.Button{}, err
 	}
@@ -258,6 +282,8 @@ func parseAction(raw *rawAction) (*deck.Action, error) {
 		URL:       raw.URL,
 		Page:      raw.Page,
 		CommandID: raw.CommandID,
+		Op:        raw.Op,
+		Minutes:   raw.Minutes,
 	}
 	if err := action.Validate(); err != nil {
 		return nil, err
@@ -307,4 +333,23 @@ func CompactPath(path string) string {
 		return "~"
 	}
 	return "~/" + filepath.ToSlash(rel)
+}
+
+func toWidget(raw rawWidget, baseDir string) deck.Widget {
+	w := deck.Widget{
+		Type:      deck.WidgetType(raw.Type),
+		Title:     raw.Title,
+		Format:    raw.Format,
+		Items:     raw.Items,
+		Cmd:       raw.Cmd,
+		IntervalS: raw.IntervalS,
+		Metric:    raw.Metric,
+		Paths:     raw.Paths,
+		OkColor:   raw.OkColor,
+		FailColor: raw.FailColor,
+	}
+	for _, p := range raw.Paths {
+		w.ResolvedPaths = append(w.ResolvedPaths, ResolvePath(p, baseDir))
+	}
+	return w
 }

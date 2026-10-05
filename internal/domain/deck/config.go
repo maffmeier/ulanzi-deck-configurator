@@ -17,6 +17,15 @@ const (
 	ActionURL        ActionType = "url"
 	ActionSwitchPage ActionType = "switch_page"
 	ActionPredefined ActionType = "predefined_command"
+	ActionTimer      ActionType = "timer"
+)
+
+// Timer operations for ActionTimer.
+const (
+	TimerToggle = "toggle"
+	TimerStart  = "start"
+	TimerPause  = "pause"
+	TimerReset  = "reset"
 )
 
 type Action struct {
@@ -26,9 +35,23 @@ type Action struct {
 	URL       string
 	Page      string
 	CommandID string
+	// Op and Minutes drive the shared countdown timer (ActionTimer).
+	Op      string
+	Minutes int
 }
 
 func (a Action) Validate() error {
+	if a.Type == ActionTimer {
+		switch a.Op {
+		case TimerToggle, TimerStart, TimerPause, TimerReset:
+		default:
+			return fmt.Errorf("timer action needs op toggle, start, pause or reset, got %q", a.Op)
+		}
+		if a.Minutes < 0 || a.Minutes > 24*60 {
+			return fmt.Errorf("timer minutes must be in 0..1440, got %d", a.Minutes)
+		}
+		return nil
+	}
 	required := map[ActionType]string{
 		ActionShell:      a.Cmd,
 		ActionShortcut:   a.Keys,
@@ -61,6 +84,8 @@ func (a Action) Clean() Action {
 		clean.Page = a.Page
 	case ActionPredefined:
 		clean.CommandID = a.CommandID
+	case ActionTimer:
+		clean.Op, clean.Minutes = a.Op, a.Minutes
 	}
 	return clean
 }
@@ -132,6 +157,8 @@ type Button struct {
 	// fired once the key is held past the long-press threshold (tap only).
 	Press     PressMode
 	LongPress *Action
+	// Live renders a widget onto the key instead of its static icon.
+	Live *Widget
 }
 
 type PressMode string
@@ -156,6 +183,11 @@ func (b *Button) ValidateBehavior() error {
 	case PressTap, PressRepeat, PressHold:
 	default:
 		return fmt.Errorf("unknown press mode %q (tap, repeat or hold)", b.Press)
+	}
+	if b.Live != nil {
+		if err := b.Live.Normalize(true); err != nil {
+			return fmt.Errorf("live: %w", err)
+		}
 	}
 	if b.LongPress != nil {
 		if b.Press != PressTap {
@@ -202,6 +234,9 @@ type SmallWindow struct {
 	MetricsItems         []string
 	TemperatureSensors   []string
 	TemperatureSeparator string
+	// Widgets, when set, replace the firmware clock/stats: the host renders
+	// them and rotates through them every RotateEveryS.
+	Widgets []Widget
 }
 
 func DefaultSmallWindow() SmallWindow {
@@ -271,7 +306,17 @@ func (s SmallWindow) Normalized() (SmallWindow, error) {
 	if s.TemperatureSeparator != " " && s.TemperatureSeparator != "|" {
 		return s, errors.New("small_window.temperature_separator must be a space or pipe")
 	}
+	for i := range s.Widgets {
+		if err := s.Widgets[i].Normalize(false); err != nil {
+			return s, fmt.Errorf("small_window.widgets[%d]: %w", i, err)
+		}
+	}
 	return s, nil
+}
+
+// UsesWidgets reports whether the host renders the info window.
+func (s SmallWindow) UsesWidgets() bool {
+	return len(s.Widgets) > 0
 }
 
 type Config struct {

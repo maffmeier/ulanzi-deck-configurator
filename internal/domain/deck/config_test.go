@@ -100,3 +100,10 @@ func TestButtonBehaviorValidation(t *testing.T) {
 		t.Fatalf("empty press must normalize to tap, got %q", b.Press)
 	}
 }
+
+func TestWidgetCleanDropsForeignFields(t *testing.T) {
+	w := Widget{Type: WidgetClock, Format: "%H", Metric: "cpu", Items: []string{"cpu"}, IntervalS: 9, Cmd: "x"}.Clean()
+	if w.Metric != "" || w.Items != nil || w.Cmd != "" || w.IntervalS != DefaultWidgetInterval || w.Format != "%H" {
+		t.Fatalf("got %+v", w)
+	}
+}
