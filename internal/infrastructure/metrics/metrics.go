@@ -96,9 +96,19 @@ func rootPath() string {
 }
 
 func (r *Reader) NetworkRate() string {
+	rate, ok := r.NetworkBytesPerSec()
+	if !ok {
+		return "n/a"
+	}
+	return FormatBytes(rate) + "/s"
+}
+
+// NetworkBytesPerSec is the combined receive and send rate since the last
+// call (0 on the first call).
+func (r *Reader) NetworkBytesPerSec() (float64, bool) {
 	counters, err := net.IOCounters(true)
 	if err != nil {
-		return "n/a"
+		return 0, false
 	}
 	var total uint64
 	for _, c := range counters {
@@ -115,10 +125,10 @@ func (r *Reader) NetworkRate() string {
 	previous := r.lastNet
 	r.lastNet = &netSample{total, now}
 	if previous == nil || total < previous.bytes {
-		return "0 B/s"
+		return 0, true
 	}
 	elapsed := math.Max(0.001, now.Sub(previous.at).Seconds())
-	return formatBytes(float64(total-previous.bytes)/elapsed) + "/s"
+	return float64(total-previous.bytes) / elapsed, true
 }
 
 // MetricValue renders one metric for the info window.
@@ -192,7 +202,7 @@ func clampPercent(v float64) int {
 	return int(math.Max(0, math.Min(100, math.Round(v))))
 }
 
-func formatBytes(v float64) string {
+func FormatBytes(v float64) string {
 	units := []string{"B", "K", "M", "G"}
 	for i, unit := range units {
 		if v < 1024 || i == len(units)-1 {

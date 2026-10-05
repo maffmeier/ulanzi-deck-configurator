@@ -61,3 +61,7 @@ func commandEnv(log *slog.Logger) []string {
 	result := slices.DeleteFunc(slices.Clone(env), func(kv string) bool { return strings.HasPrefix(kv, "PATH=") })
 	return append(result, "PATH="+strings.Join(merged, string(os.PathListSeparator)))
 }
+
+func shellCommand(ctx context.Context, command string) *exec.Cmd {
+	return exec.CommandContext(ctx, "/bin/sh", "-c", command)
+}

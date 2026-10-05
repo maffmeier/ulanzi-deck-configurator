@@ -2,6 +2,8 @@
 package actions
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -119,4 +121,21 @@ func (r *Runner) run(name string, args ...string) error {
 		return fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// Output runs a shell command for a display widget and returns its trimmed
+// stdout; ok reports exit code 0.
+func (r *Runner) Output(ctx context.Context, command string) (out string, ok bool, err error) {
+	cmd := shellCommand(ctx, command)
+	cmd.Env = r.env
+	hideWindow(cmd)
+	data, err := cmd.Output()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return strings.TrimSpace(string(data)), false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(string(data)), true, nil
 }

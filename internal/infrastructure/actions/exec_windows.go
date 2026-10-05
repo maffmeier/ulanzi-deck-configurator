@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -23,7 +24,11 @@ func detach(cmd *exec.Cmd) {
 }
 
 func hideWindow(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.HideWindow = true
+	cmd.SysProcAttr.CreationFlags |= createNoWindow
 }
 
 func commandEnv(*slog.Logger) []string { return os.Environ() }
@@ -165,4 +170,10 @@ func (r *Runner) pressCombo(c Combo) (func() error, error) {
 		return nil, err
 	}
 	return func() error { return sendInput(up) }, nil
+}
+
+func shellCommand(ctx context.Context, command string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "cmd.exe")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow, CmdLine: `cmd.exe /C ` + command}
+	return cmd
 }
