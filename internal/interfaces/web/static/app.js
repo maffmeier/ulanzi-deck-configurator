@@ -88,11 +88,20 @@ function normalizeButton(raw) {
         preview_url: raw.preview_url || "",
         action: { ...emptyAction(), ...(raw.action || {}) },
         text_style: { ...DEFAULT_STYLE, ...(raw.text_style || {}) },
+        press: raw.press || "tap",
+        long_press: { ...emptyAction(), ...(raw.long_press || {}) },
     };
 }
 
+const PRESS_MODES = Object.freeze([
+    { id: "tap", label: "Einmal auslösen" },
+    { id: "repeat", label: "Wiederholen, solange gehalten" },
+    { id: "hold", label: "Gedrückt halten (z.B. Push-to-Talk)" },
+]);
+
 function isEmptyButton(b) {
     return !b.label && !b.icon_path && (!b.action || b.action.type === "none") &&
+        (!b.long_press || b.long_press.type === "none") &&
         JSON.stringify({ ...DEFAULT_STYLE, ...b.text_style }).toLowerCase() === JSON.stringify(DEFAULT_STYLE).toLowerCase();
 }
 
@@ -102,7 +111,7 @@ function iconUrl(assetId) {
 
 window.deckApp = function deckApp() {
     return {
-        INFO_INDEX, ACTION_LABELS, FONTS, METRICS,
+        INFO_INDEX, ACTION_LABELS, FONTS, METRICS, PRESS_MODES,
         predefined: [],
         slots: SLOTS,
         editor: null,
@@ -194,6 +203,8 @@ window.deckApp = function deckApp() {
                 icon_path: b.icon_path || null,
                 action: b.action,
                 text_style: { ...b.text_style, font_size: Number(b.text_style.font_size) },
+                press: b.press || "tap",
+                long_press: b.press === "tap" && b.long_press?.type !== "none" ? b.long_press : null,
             }));
         },
 
@@ -247,7 +258,31 @@ window.deckApp = function deckApp() {
             const a = this.cur.action;
             if (a.type === "switch_page" && !a.page) a.page = "@next";
             if (a.type === "predefined_command" && !a.command_id) a.command_id = this.predefined[0]?.id || "";
+            if (!this.pressModeAllowed(this.cur.press)) this.cur.press = "tap";
             this.markDirty();
+        },
+
+        // Mirrors deck.Button.ValidateBehavior.
+        pressModeAllowed(mode) {
+            const type = this.cur?.action.type;
+            if (mode === "repeat") return type !== "none" && type !== "switch_page";
+            if (mode === "hold") return type === "shortcut" || type === "predefined_command";
+            return true;
+        },
+
+        longPressTypeChanged() {
+            const a = this.cur.long_press;
+            if (a.type === "switch_page" && !a.page) a.page = "@next";
+            if (a.type === "predefined_command" && !a.command_id) a.command_id = this.predefined[0]?.id || "";
+            this.markDirty();
+        },
+
+        pressBadge(b) {
+            if (!b) return "";
+            if (b.press === "repeat") return "⟳";
+            if (b.press === "hold") return "⇩";
+            if (b.long_press && b.long_press.type !== "none") return "⧗";
+            return "";
         },
 
         // ───────────── Status ─────────────
@@ -430,8 +465,13 @@ window.deckApp = function deckApp() {
         keyTooltip(slot) {
             const b = this.button(slot.index);
             const name = slot.kind === "info" ? "Infofenster" : `Taste ${slot.index + 1}`;
-            if (!b || b.action.type === "none") return name;
-            return `${name} · ${this.describeAction(b.action)}`;
+            if (!b) return name;
+            const parts = [name];
+            if (b.action.type !== "none") parts.push(this.describeAction(b.action));
+            if (b.press === "repeat") parts.push("wiederholt beim Halten");
+            if (b.press === "hold") parts.push("wird gehalten");
+            if (b.long_press && b.long_press.type !== "none") parts.push(`lang: ${this.describeAction(b.long_press)}`);
+            return parts.join(" · ");
         },
 
         describeAction(a) {
@@ -651,6 +691,11 @@ window.deckApp = function deckApp() {
         async applyPreset(index, preset) {
             const b = this.ensureButton(index);
             b.action = { ...emptyAction(), ...preset.action };
+            const type = b.action.type;
+            if ((b.press === "hold" && type !== "shortcut" && type !== "predefined_command") ||
+                (b.press === "repeat" && type === "switch_page")) {
+                b.press = "tap";
+            }
             if (index !== INFO_INDEX && !b.icon_path && !b.label) {
                 if (preset.useIcon) {
                     await this.importIcon(b, preset.icon);

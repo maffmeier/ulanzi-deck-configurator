@@ -122,6 +122,7 @@
                     :class="{ on: isFixed(slot.index) }"
                     @click.stop="select(slot.index); toggleFixed()"
                     :title="isFixed(slot.index) ? 'Angepinnt: auf allen Seiten. Klicken zum Lösen' : 'Anpinnen: auf allen Seiten anzeigen'">📌</button>
+            <span class="badge behavior" x-show="pressBadge(button(slot.index))" x-text="pressBadge(button(slot.index))"></span>
             <span class="badge action" x-show="button(slot.index)?.action?.type && button(slot.index).action.type !== 'none'">
               <img :src="actionIconUrl(button(slot.index)?.action)" alt="" />
             </span>
@@ -265,6 +266,65 @@
               </select>
             </label>
           </template>
+
+          <div class="behavior">
+            <label class="field">
+              <span>Beim Halten</span>
+              <select x-model="cur.press" @change="markDirty()">
+                <template x-for="m in PRESS_MODES" :key="m.id">
+                  <option :value="m.id" x-text="m.label" :disabled="!pressModeAllowed(m.id)" :selected="m.id === cur.press"></option>
+                </template>
+              </select>
+            </label>
+            <p class="hint" x-show="cur.press === 'hold'">Die Tastenkombination bleibt gedrückt, bis du die Taste am Deck loslässt.</p>
+            <p class="hint" x-show="cur.press === 'repeat'">Löst sofort aus und wiederholt nach kurzer Verzögerung, solange die Taste gedrückt ist.</p>
+
+            <template x-if="cur.press === 'tap'">
+              <div class="long-press">
+                <label class="field">
+                  <span>Langer Druck (ab 0,5 s)</span>
+                  <select x-model="cur.long_press.type" @change="longPressTypeChanged()">
+                    <template x-for="(label, type) in ACTION_LABELS" :key="type">
+                      <option :value="type" x-text="label" :selected="type === cur.long_press.type"></option>
+                    </template>
+                  </select>
+                </label>
+                <template x-if="cur.long_press.type === 'shell'">
+                  <label class="field grow"><span>Befehl</span>
+                    <input type="text" class="mono" x-model="cur.long_press.cmd" @input="markDirty()" /></label>
+                </template>
+                <template x-if="cur.long_press.type === 'shortcut'">
+                  <label class="field grow"><span>Tastenkürzel</span>
+                    <input type="text" class="mono" x-model="cur.long_press.keys" @input="markDirty()" placeholder="z.B. ctrl+alt+t" /></label>
+                </template>
+                <template x-if="cur.long_press.type === 'url'">
+                  <label class="field grow"><span>Adresse</span>
+                    <input type="url" x-model="cur.long_press.url" @input="markDirty()" /></label>
+                </template>
+                <template x-if="cur.long_press.type === 'switch_page'">
+                  <label class="field"><span>Ziel</span>
+                    <select x-model="cur.long_press.page" @change="markDirty()">
+                      <option value="@next">→ Nächste Seite</option>
+                      <option value="@prev">← Vorherige Seite</option>
+                      <template x-for="name in pageNames()" :key="name"><option :value="name" x-text="'Seite: ' + name"></option></template>
+                    </select></label>
+                </template>
+                <template x-if="cur.long_press.type === 'predefined_command'">
+                  <label class="field"><span>Funktion</span>
+                    <select x-model="cur.long_press.command_id" @change="markDirty()">
+                      <template x-for="g in predefinedGroups()" :key="g.name">
+                        <optgroup :label="g.name">
+                          <template x-for="p in g.items" :key="p.id">
+                            <option :value="p.id" x-text="p.label" :selected="p.id === cur.long_press.command_id"></option>
+                          </template>
+                        </optgroup>
+                      </template>
+                    </select></label>
+                </template>
+              </div>
+            </template>
+            <p class="hint" x-show="cur.press === 'tap' && cur.long_press.type !== 'none'">Kurz drücken löst die Aktion oben aus, beim Loslassen. Ab 0,5 s Halten nur die Aktion für den langen Druck.</p>
+          </div>
 
           <details class="text-style" :open="!cur.preview_url">
             <summary>Textdarstellung (ohne Bild)</summary>

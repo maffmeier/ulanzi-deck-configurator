@@ -9,6 +9,8 @@ Abhängigkeiten.
 - Tasten mit Icons oder Text, beliebig viele Seiten, feste Tasten auf allen Seiten
 - Aktionen: Befehl ausführen, Tastenkürzel, Website öffnen, Seite wechseln
   (inkl. „nächste“/„vorherige“ Seite), Medien- und Lautstärketasten
+- Tastenverhalten pro Taste: langer Druck als Zweitaktion, Wiederholen
+  solange gehalten, oder Kürzel gedrückt halten (Push-to-Talk)
 - Infofenster: Uhr, CPU/RAM der Firmware oder eigene Messwerte
   (CPU, RAM, GPU, Temperatur, Festplatte, Netzwerk, Akku)
 - Web-Editor im Stil der Stream-Deck-Software mit Drag & Drop und
@@ -72,12 +74,31 @@ Schreibweise wie `ctrl+alt+t`, `super+Return`, `Win+Enter`, `cmd+shift+4`,
 
 | System  | Umsetzung |
 | ------- | --------- |
-| Linux   | Wayland: `wtype`, X11: `xdotool` (muss installiert sein) |
+| Linux   | Wayland (sway, Hyprland & andere wlroots-Compositors): eingebaute virtuelle Tastatur, sonst `wtype`; X11: `xdotool` |
 | Windows | `SendInput`, keine Abhängigkeiten |
 | macOS   | `osascript`; ulanzi-deck braucht die Freigabe unter *Datenschutz & Sicherheit → Bedienungshilfen* |
 
 Unter tiling Compositors (sway, Hyprland) ist oft ein Befehl wie
 `swaymsg exec alacritty` robuster als ein simuliertes Kürzel.
+
+### Tastenverhalten
+
+```yaml
+- index: 3
+  action: {type: predefined_command, command_id: media_play_pause}
+  long_press: {type: predefined_command, command_id: media_next}  # ab 0,5 s halten
+- index: 4
+  action: {type: predefined_command, command_id: audio_volume_up}
+  press: repeat     # wiederholt, solange die Taste gehalten wird
+- index: 5
+  action: {type: shortcut, keys: ctrl+shift+m}
+  press: hold       # Kürzel bleibt gedrückt, bis die Taste losgelassen wird
+```
+
+Mit `long_press` löst ein kurzer Druck die normale Aktion beim Loslassen
+aus. `press: hold` funktioniert nur mit Tastenkürzeln; unter Wayland braucht
+es einen wlroots-Compositor, GNOME und KDE bieten die nötige Schnittstelle
+nicht.
 
 ## Plattformhinweise
 

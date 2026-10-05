@@ -40,6 +40,8 @@ type editorButton struct {
 	PreviewURL *string         `json:"preview_url"`
 	Action     editorAction    `json:"action"`
 	TextStyle  editorTextStyle `json:"text_style"`
+	Press      string          `json:"press"`
+	LongPress  *editorAction   `json:"long_press"`
 }
 
 type editorPage struct {
@@ -156,9 +158,41 @@ func toEditorButton(b deck.Button) editorButton {
 		}
 	}
 	if a := b.Action; a != nil {
-		eb.Action = editorAction{Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page}
+		eb.Action = toEditorAction(*a)
+	}
+	eb.Press = string(b.Press)
+	if eb.Press == "" {
+		eb.Press = string(deck.PressTap)
+	}
+	if b.LongPress != nil {
+		lp := toEditorAction(*b.LongPress)
+		eb.LongPress = &lp
 	}
 	return eb
+}
+
+func toEditorAction(a deck.Action) editorAction {
+	return editorAction{Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page}
+}
+
+// fromEditorAction returns nil for "none"; only the type's own field is kept.
+func fromEditorAction(ea editorAction) (*deck.Action, error) {
+	if ea.Type == "" || ea.Type == "none" {
+		return nil, nil
+	}
+	a := deck.Action{
+		Type:      deck.ActionType(ea.Type),
+		Cmd:       ea.Cmd,
+		Keys:      ea.Keys,
+		CommandID: ea.CommandID,
+		URL:       ea.URL,
+		Page:      ea.Page,
+	}
+	if err := a.Validate(); err != nil {
+		return nil, err
+	}
+	a = a.Clean()
+	return &a, nil
 }
 
 func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
@@ -251,20 +285,20 @@ func fromEditorButtons(buttons []editorButton, scope string, skip map[int]bool) 
 			}
 			b.TextStyle = normalized
 		}
-		if eb.Action.Type != "" && eb.Action.Type != "none" {
-			a := deck.Action{
-				Type:      deck.ActionType(eb.Action.Type),
-				Cmd:       eb.Action.Cmd,
-				Keys:      eb.Action.Keys,
-				CommandID: eb.Action.CommandID,
-				URL:       eb.Action.URL,
-				Page:      eb.Action.Page,
+		where := fmt.Sprintf("%s, Taste %d", scope, eb.Index+1)
+		action, err := fromEditorAction(eb.Action)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", where, err)
+		}
+		b.Action = action
+		if eb.LongPress != nil {
+			if b.LongPress, err = fromEditorAction(*eb.LongPress); err != nil {
+				return nil, fmt.Errorf("%s, langer Druck: %w", where, err)
 			}
-			if err := a.Validate(); err != nil {
-				return nil, fmt.Errorf("%s, Taste %d: %w", scope, eb.Index+1, err)
-			}
-			a = a.Clean()
-			b.Action = &a
+		}
+		b.Press = deck.PressMode(eb.Press)
+		if err := b.ValidateBehavior(); err != nil {
+			return nil, fmt.Errorf("%s: %w", where, err)
 		}
 		result = append(result, b)
 	}
