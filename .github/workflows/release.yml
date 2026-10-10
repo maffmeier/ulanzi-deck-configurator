@@ -49,8 +49,83 @@ jobs:
           name: bin-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
 
-  release:
+  linux-packages:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bin-linux-*
+          path: dist
+          merge-multiple: true
+      - name: deb und rpm bauen
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          export VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist/pkg out
+          for ARCH in amd64 arm64; do
+            install -m755 "dist/ulanzi-deck-linux-$ARCH" dist/pkg/ulanzi-deck
+            for packager in deb rpm; do
+              ARCH=$ARCH nfpm pkg --config packaging/linux/nfpm.yaml --packager $packager --target out/
+            done
+          done
+          ls -l out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pkg-linux
+          path: out/
+
+  windows-installer:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bin-windows-*
+          path: dist
+          merge-multiple: true
+      - name: Installer bauen
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+            $env:PATH += ";${env:ProgramFiles(x86)}\Inno Setup 6"
+          }
+          $version = "$env:GITHUB_REF_NAME".TrimStart("v")
+          foreach ($arch in "amd64", "arm64") {
+            iscc /Q "/DAppVersion=$version" "/DArch=$arch" packaging\windows\ulanzi-deck.iss
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Get-ChildItem dist\*-setup.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pkg-windows
+          path: dist/*-setup.exe
+
+  macos-dmg:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bin-darwin-*
+          path: dist
+          merge-multiple: true
+      - name: App-Bundle und dmg bauen
+        run: sh packaging/macos/build-dmg.sh "${GITHUB_REF_NAME#v}" dist/ulanzi-deck-darwin-arm64 dist/ulanzi-deck-darwin-amd64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pkg-macos
+          path: dist/*.dmg
+
+  release:
+    needs: [linux-packages, windows-installer, macos-dmg]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,11 +133,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          pattern: bin-*
           path: dist
           merge-multiple: true
       - name: Prüfsummen
-        run: cd dist && sha256sum ulanzi-deck-* > SHA256SUMS && cat SHA256SUMS
+        run: cd dist && sha256sum ulanzi-deck* > SHA256SUMS && cat SHA256SUMS
       - name: GitHub-Release anlegen
         env:
           GH_TOKEN: ${{ github.token }}

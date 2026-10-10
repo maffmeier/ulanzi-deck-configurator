@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ulanzi Deck
+GenericName=Stream Deck Controller
+Comment=Control and configure the Ulanzi Stream Controller D200
+Comment[de]=Steuerung und Konfiguration für den Ulanzi Stream Controller D200
+Exec=ulanzi-deck --open
+Icon=ulanzi-deck
+Terminal=false
+Categories=Utility;
+Keywords=stream deck;ulanzi;d200;macro;

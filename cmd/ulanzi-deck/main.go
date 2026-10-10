@@ -59,7 +59,7 @@ func main() {
 		deck.SystemLanguage = "en"
 	}
 
-	args := os.Args[1:]
+	args := withoutProcessSerial(os.Args[1:])
 	command := "run"
 	if len(args) > 0 && args[0] != "" && args[0][0] != '-' {
 		command, args = args[0], args[1:]
@@ -91,6 +91,18 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Fehler:", err)
 		os.Exit(1)
 	}
+}
+
+// withoutProcessSerial drops the -psn_ argument older macOS versions pass
+// to apps launched from Finder.
+func withoutProcessSerial(args []string) []string {
+	kept := args[:0:0]
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-psn_") {
+			kept = append(kept, a)
+		}
+	}
+	return kept
 }
 
 type runOptions struct {

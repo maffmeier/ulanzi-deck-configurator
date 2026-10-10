@@ -1,0 +1,36 @@
+# Builds .deb/.rpm from a release binary:
+#   cp dist/ulanzi-deck-linux-amd64 dist/pkg/ulanzi-deck
+#   VERSION=0.4.0 ARCH=amd64 nfpm pkg --config packaging/linux/nfpm.yaml --packager deb --target dist/
+name: ulanzi-deck
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: maffmeier <2385541+maffmeier@users.noreply.github.com>
+description: |
+  Control and configure the Ulanzi Stream Controller D200: keys with icons,
+  pages, actions, live widgets and a browser-based editor.
+vendor: maffmeier
+homepage: https://github.com/maffmeier/ulanzi-deck-configurator
+license: MIT
+recommends:
+  - wtype
+  - xdotool
+contents:
+  - src: dist/pkg/ulanzi-deck
+    dst: /usr/bin/ulanzi-deck
+    file_info:
+      mode: 0755
+  - src: packaging/linux/70-ulanzi-deck.rules
+    dst: /usr/lib/udev/rules.d/70-ulanzi-deck.rules
+  - src: packaging/linux/ulanzi-deck.desktop
+    dst: /usr/share/applications/ulanzi-deck.desktop
+  - src: packaging/linux/ulanzi-deck.png
+    dst: /usr/share/icons/hicolor/256x256/apps/ulanzi-deck.png
+  - src: LICENSE
+    dst: /usr/share/licenses/ulanzi-deck/LICENSE
+  - src: THIRD_PARTY_NOTICES.md
+    dst: /usr/share/licenses/ulanzi-deck/THIRD_PARTY_NOTICES.md
+scripts:
+  postinstall: packaging/linux/postinstall.sh
