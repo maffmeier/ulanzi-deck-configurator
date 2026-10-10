@@ -14,6 +14,7 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/configfile"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
 )
 
@@ -167,5 +168,26 @@ func TestPredefinedIconsExistInCatalog(t *testing.T) {
 		if _, err := cat.PNG(p.Icon); err != nil {
 			t.Fatalf("%s: icon %s: %v", p.ID, p.Icon, err)
 		}
+	}
+}
+
+func TestSecretsAreWriteOnly(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.Secrets = integrations.NewSecretStore(filepath.Join(filepath.Dir(s.ConfigPath), "secrets.yaml"))
+	h := s.Handler()
+
+	rec := do(t, h, "PUT", "/api/secrets", map[string]any{"home_assistant_url": "http://ha:8123", "home_assistant_token": "geheim", "obs_password": "pw"})
+	if rec.Code != 200 || strings.Contains(rec.Body.String(), "geheim") || strings.Contains(rec.Body.String(), `"pw"`) {
+		t.Fatalf("secrets leaked or failed: %d %s", rec.Code, rec.Body)
+	}
+	var view secretsView
+	_ = json.Unmarshal(do(t, h, "GET", "/api/secrets", nil).Body.Bytes(), &view)
+	if !view.HomeAssistantTokenSet || !view.OBSPasswordSet || view.HomeAssistantToken != "" {
+		t.Fatalf("view %+v", view)
+	}
+	// Saving without a token keeps the stored one.
+	do(t, h, "PUT", "/api/secrets", map[string]any{"home_assistant_url": "http://ha2:8123"})
+	if got := s.Secrets.Get().HomeAssistant; got.Token != "geheim" || got.URL != "http://ha2:8123" {
+		t.Fatalf("stored %+v", got)
 	}
 }

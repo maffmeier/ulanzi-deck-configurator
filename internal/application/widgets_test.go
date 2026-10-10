@@ -28,6 +28,12 @@ func (f *fakeSources) CommandOutput(context.Context, string) (string, bool, erro
 func (f *fakeSources) NowPlaying() (MediaInfo, error) {
 	return MediaInfo{Title: "Song", Artist: "Band", Playing: true}, nil
 }
+func (f *fakeSources) HomeAssistantState(string) (HomeState, error) {
+	return HomeState{State: "on", Unit: "", Name: "Küche"}, nil
+}
+func (f *fakeSources) OBSStatus() (OBSInfo, error) {
+	return OBSInfo{Scene: "Kamera", Recording: true, RecordTime: "00:01:02"}, nil
+}
 func (f *fakeSources) Cover(string) image.Image { return nil }
 func (f *fakeSources) LoadImage(string) (image.Image, error) {
 	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
@@ -156,5 +162,24 @@ func TestWidgetSmallWindowUploadsOnlyChanges(t *testing.T) {
 	dev.mu.Unlock()
 	if keepAlive == 0 {
 		t.Fatal("watchdog must still be fed")
+	}
+}
+
+func TestHomeAndOBSWidgets(t *testing.T) {
+	e := newEngine(&fakeSources{})
+	home := deck.Widget{Type: deck.WidgetHome, EntityID: "light.kitchen", ActiveState: "on", OkColor: "#FACC15", IntervalS: 5}
+	e.Render(home, 196, 196, "#000000", time.Now())
+	eventually(t, func() bool {
+		return string(e.Render(home, 196, 196, "#000000", time.Now())) == "text|#FACC15|Küche|[on]"
+	})
+
+	rec := deck.Widget{Type: deck.WidgetOBS, Show: "record"}
+	e.Render(rec, 196, 196, "#000000", time.Now())
+	eventually(t, func() bool {
+		return string(e.Render(rec, 196, 196, "#000000", time.Now())) == "text|#B91C1C|OBS|[● REC 00:01:02]"
+	})
+	scene := deck.Widget{Type: deck.WidgetOBS, Show: "scene"}
+	if got := string(e.Render(scene, 196, 196, "#000000", time.Now())); got != "text|#000000|OBS|[Kamera]" {
+		t.Fatalf("scene: %s", got)
 	}
 }

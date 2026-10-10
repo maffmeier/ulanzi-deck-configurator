@@ -40,16 +40,20 @@ type outToggle struct {
 }
 
 type outWidget struct {
-	Type      string   `yaml:"type"`
-	Title     string   `yaml:"title,omitempty"`
-	Format    string   `yaml:"format,omitempty"`
-	Items     []string `yaml:"items,omitempty"`
-	Cmd       string   `yaml:"cmd,omitempty"`
-	IntervalS float64  `yaml:"interval_s,omitempty"`
-	Metric    string   `yaml:"metric,omitempty"`
-	Paths     []string `yaml:"paths,omitempty"`
-	OkColor   string   `yaml:"ok_color,omitempty"`
-	FailColor string   `yaml:"fail_color,omitempty"`
+	Type        string   `yaml:"type"`
+	Title       string   `yaml:"title,omitempty"`
+	Format      string   `yaml:"format,omitempty"`
+	Items       []string `yaml:"items,omitempty"`
+	Cmd         string   `yaml:"cmd,omitempty"`
+	IntervalS   float64  `yaml:"interval_s,omitempty"`
+	Metric      string   `yaml:"metric,omitempty"`
+	Paths       []string `yaml:"paths,omitempty"`
+	OkColor     string   `yaml:"ok_color,omitempty"`
+	FailColor   string   `yaml:"fail_color,omitempty"`
+	EntityID    string   `yaml:"entity_id,omitempty"`
+	Attribute   string   `yaml:"attribute,omitempty"`
+	ActiveState string   `yaml:"active_state,omitempty"`
+	Show        string   `yaml:"show,omitempty"`
 }
 
 type outTextStyle struct {
@@ -303,6 +307,13 @@ func toOutWidget(w *deck.Widget) *outWidget {
 		Paths:     w.Paths,
 		OkColor:   w.OkColor,
 		FailColor: w.FailColor,
+
+		EntityID:  w.EntityID,
+		Attribute: w.Attribute,
+		Show:      w.Show,
+	}
+	if w.ActiveState != "on" {
+		ow.ActiveState = w.ActiveState
 	}
 	if w.IntervalS != deck.DefaultWidgetInterval {
 		ow.IntervalS = w.IntervalS

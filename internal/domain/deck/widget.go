@@ -16,7 +16,12 @@ const (
 	WidgetImage   WidgetType = "image"
 	WidgetTimer   WidgetType = "timer"
 	WidgetMedia   WidgetType = "media"
+	WidgetHome    WidgetType = "home_assistant"
+	WidgetOBS     WidgetType = "obs"
 )
+
+// OBSShows are the things an obs widget can display.
+var OBSShows = []string{"scene", "record", "stream"}
 
 // GraphMetrics can be plotted over time.
 var GraphMetrics = []string{"cpu", "memory", "network"}
@@ -48,6 +53,13 @@ type Widget struct {
 	// red while the microphone is muted.
 	OkColor   string
 	FailColor string
+	// Home Assistant entity; Attribute shows an attribute instead of the
+	// state, ActiveState is the state that counts as "on" for the colors.
+	EntityID    string
+	Attribute   string
+	ActiveState string
+	// Show selects what an obs widget displays.
+	Show string
 }
 
 // Normalize validates the widget and fills defaults. Keys can't show image
@@ -71,15 +83,8 @@ func (w *Widget) Normalize(onKey bool) error {
 		if strings.TrimSpace(w.Cmd) == "" {
 			return fmt.Errorf("command widget needs cmd")
 		}
-		for _, c := range []*string{&w.OkColor, &w.FailColor} {
-			if *c == "" {
-				continue
-			}
-			normalized, err := NormalizeHexColor(*c)
-			if err != nil {
-				return err
-			}
-			*c = normalized
+		if err := normalizeColors(w); err != nil {
+			return err
 		}
 	case WidgetGraph:
 		if !slices.Contains(GraphMetrics, w.Metric) {
@@ -91,6 +96,23 @@ func (w *Widget) Normalize(onKey bool) error {
 		}
 		if len(w.Paths) == 0 {
 			return fmt.Errorf("image widget needs at least one path")
+		}
+	case WidgetHome:
+		if strings.TrimSpace(w.EntityID) == "" {
+			return fmt.Errorf("home_assistant widget needs entity_id")
+		}
+		if w.ActiveState == "" {
+			w.ActiveState = "on"
+		}
+		if err := normalizeColors(w); err != nil {
+			return err
+		}
+	case WidgetOBS:
+		if w.Show == "" {
+			w.Show = "scene"
+		}
+		if !slices.Contains(OBSShows, w.Show) {
+			return fmt.Errorf("obs widget shows scene, record or stream, got %q", w.Show)
 		}
 	case WidgetTimer, WidgetMedia:
 	default:
@@ -123,6 +145,25 @@ func (w Widget) Clean() Widget {
 		clean.Paths, clean.ResolvedPaths, clean.IntervalS = w.Paths, w.ResolvedPaths, w.IntervalS
 	case WidgetTimer:
 		clean.Title = w.Title
+	case WidgetHome:
+		clean.Title, clean.EntityID, clean.Attribute, clean.ActiveState = w.Title, w.EntityID, w.Attribute, w.ActiveState
+		clean.OkColor, clean.FailColor, clean.IntervalS = w.OkColor, w.FailColor, w.IntervalS
+	case WidgetOBS:
+		clean.Title, clean.Show = w.Title, w.Show
 	}
 	return clean
+}
+
+func normalizeColors(w *Widget) error {
+	for _, c := range []*string{&w.OkColor, &w.FailColor} {
+		if *c == "" {
+			continue
+		}
+		normalized, err := NormalizeHexColor(*c)
+		if err != nil {
+			return err
+		}
+		*c = normalized
+	}
+	return nil
 }

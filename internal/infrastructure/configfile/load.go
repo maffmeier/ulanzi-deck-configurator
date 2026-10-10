@@ -43,16 +43,20 @@ type rawToggle struct {
 }
 
 type rawWidget struct {
-	Type      string   `yaml:"type"`
-	Title     string   `yaml:"title"`
-	Format    string   `yaml:"format"`
-	Items     []string `yaml:"items"`
-	Cmd       string   `yaml:"cmd"`
-	IntervalS float64  `yaml:"interval_s"`
-	Metric    string   `yaml:"metric"`
-	Paths     []string `yaml:"paths"`
-	OkColor   string   `yaml:"ok_color"`
-	FailColor string   `yaml:"fail_color"`
+	Type        string   `yaml:"type"`
+	Title       string   `yaml:"title"`
+	Format      string   `yaml:"format"`
+	Items       []string `yaml:"items"`
+	Cmd         string   `yaml:"cmd"`
+	IntervalS   float64  `yaml:"interval_s"`
+	Metric      string   `yaml:"metric"`
+	Paths       []string `yaml:"paths"`
+	OkColor     string   `yaml:"ok_color"`
+	FailColor   string   `yaml:"fail_color"`
+	EntityID    string   `yaml:"entity_id"`
+	Attribute   string   `yaml:"attribute"`
+	ActiveState string   `yaml:"active_state"`
+	Show        string   `yaml:"show"`
 }
 
 type rawTextStyle struct {
@@ -413,6 +417,11 @@ func toWidget(raw rawWidget, baseDir string) deck.Widget {
 		Paths:     raw.Paths,
 		OkColor:   raw.OkColor,
 		FailColor: raw.FailColor,
+
+		EntityID:    raw.EntityID,
+		Attribute:   raw.Attribute,
+		ActiveState: raw.ActiveState,
+		Show:        raw.Show,
 	}
 	for _, p := range raw.Paths {
 		w.ResolvedPaths = append(w.ResolvedPaths, ResolvePath(p, baseDir))

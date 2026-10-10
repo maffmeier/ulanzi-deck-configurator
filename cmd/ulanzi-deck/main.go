@@ -24,6 +24,7 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/configfile"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/d200"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/interfaces/tray"
@@ -222,10 +223,13 @@ func runCommand(args []string) error {
 	defer cancel()
 
 	dev := d200.NewDevice(d200.OpenHID, log.With("component", "deck"))
-	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner}, render.Renderer{}, log.With("component", "widgets"))
+	secrets := integrations.NewSecretStore(integrations.SecretsPath(configPath))
+	integ := integrationRunner{secrets: secrets, obs: integrations.NewOBSClient()}
+	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner, integrations: integ}, render.Renderer{}, log.With("component", "widgets"))
 	daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, engine, cfg, log.With("component", "daemon"))
 
 	daemon.SetDesktop(desktopState{})
+	daemon.SetIntegrations(integ)
 
 	go dev.Run(ctx)
 	go daemon.Run(ctx)
@@ -238,6 +242,7 @@ func runCommand(args []string) error {
 		Metrics:    reader,
 		Connected:  dev.Connected,
 		Widgets:    engine,
+		Secrets:    secrets,
 		Log:        log.With("component", "web"),
 	}
 	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second}

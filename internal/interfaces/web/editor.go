@@ -42,16 +42,20 @@ type editorToggle struct {
 }
 
 type editorWidget struct {
-	Type      string   `json:"type"`
-	Title     string   `json:"title"`
-	Format    string   `json:"format"`
-	Items     []string `json:"items"`
-	Cmd       string   `json:"cmd"`
-	IntervalS float64  `json:"interval_s"`
-	Metric    string   `json:"metric"`
-	Paths     []string `json:"paths"`
-	OkColor   string   `json:"ok_color"`
-	FailColor string   `json:"fail_color"`
+	Type        string   `json:"type"`
+	Title       string   `json:"title"`
+	Format      string   `json:"format"`
+	Items       []string `json:"items"`
+	Cmd         string   `json:"cmd"`
+	IntervalS   float64  `json:"interval_s"`
+	Metric      string   `json:"metric"`
+	Paths       []string `json:"paths"`
+	OkColor     string   `json:"ok_color"`
+	FailColor   string   `json:"fail_color"`
+	EntityID    string   `json:"entity_id"`
+	Attribute   string   `json:"attribute"`
+	ActiveState string   `json:"active_state"`
+	Show        string   `json:"show"`
 }
 
 type editorTextStyle struct {
@@ -273,6 +277,7 @@ func toEditorWidget(w deck.Widget) editorWidget {
 	return editorWidget{
 		Type: string(w.Type), Title: w.Title, Format: w.Format, Items: nonNil(w.Items), Cmd: w.Cmd,
 		IntervalS: w.IntervalS, Metric: w.Metric, Paths: nonNil(w.Paths), OkColor: w.OkColor, FailColor: w.FailColor,
+		EntityID: w.EntityID, Attribute: w.Attribute, ActiveState: w.ActiveState, Show: w.Show,
 	}
 }
 
@@ -282,6 +287,8 @@ func fromEditorWidget(ew editorWidget, onKey bool, baseDir string) (deck.Widget,
 	w := deck.Widget{
 		Type: deck.WidgetType(ew.Type), Title: strings.TrimSpace(ew.Title), Format: ew.Format, Items: ew.Items,
 		Cmd: ew.Cmd, IntervalS: ew.IntervalS, Metric: ew.Metric, OkColor: ew.OkColor, FailColor: ew.FailColor,
+		EntityID: strings.TrimSpace(ew.EntityID), Attribute: strings.TrimSpace(ew.Attribute),
+		ActiveState: strings.TrimSpace(ew.ActiveState), Show: ew.Show,
 	}
 	for _, p := range ew.Paths {
 		if p = strings.TrimSpace(p); p != "" {

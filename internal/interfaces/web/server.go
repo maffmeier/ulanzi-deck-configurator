@@ -27,6 +27,7 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/catalog"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/configfile"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/d200"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 )
@@ -41,6 +42,7 @@ type Server struct {
 	Metrics    *metrics.Reader
 	Connected  func() bool
 	Widgets    *application.WidgetEngine
+	Secrets    *integrations.SecretStore
 	Log        *slog.Logger
 }
 
@@ -63,6 +65,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/temperature-sensors", s.temperatureSensors)
 	mux.HandleFunc("GET /api/predefined", s.predefined)
 	mux.HandleFunc("POST /api/render/widget", s.renderWidget)
+	mux.HandleFunc("GET /api/secrets", s.getSecrets)
+	mux.HandleFunc("PUT /api/secrets", s.putSecrets)
+	mux.HandleFunc("POST /api/secrets/test", s.testSecrets)
 	mux.HandleFunc("POST /api/assets", s.uploadAsset)
 	mux.HandleFunc("GET /api/asset", s.getAsset)
 	mux.HandleFunc("GET /api/builtin-assets", s.builtinAssets)
@@ -522,4 +527,87 @@ func (s *Server) renderWidget(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(s.Widgets.Render(widget, width, height, bg, time.Now()))
+}
+
+// secretsView never sends tokens back to the browser; it only tells
+// whether one is set. Empty fields in a PUT keep the stored value.
+type secretsView struct {
+	HomeAssistantURL      string `json:"home_assistant_url"`
+	HomeAssistantToken    string `json:"home_assistant_token"`
+	HomeAssistantTokenSet bool   `json:"home_assistant_token_set"`
+	OBSURL                string `json:"obs_url"`
+	OBSPassword           string `json:"obs_password"`
+	OBSPasswordSet        bool   `json:"obs_password_set"`
+}
+
+func (s *Server) getSecrets(w http.ResponseWriter, _ *http.Request) {
+	if s.Secrets == nil {
+		writeJSON(w, http.StatusOK, secretsView{})
+		return
+	}
+	sec := s.Secrets.Get()
+	writeJSON(w, http.StatusOK, secretsView{
+		HomeAssistantURL: sec.HomeAssistant.URL, HomeAssistantTokenSet: sec.HomeAssistant.Token != "",
+		OBSURL: sec.OBS.URL, OBSPasswordSet: sec.OBS.Password != "",
+	})
+}
+
+func (s *Server) mergeSecrets(r *http.Request) (integrations.Secrets, error) {
+	var view secretsView
+	if err := readJSON(r, &view); err != nil {
+		return integrations.Secrets{}, err
+	}
+	sec := integrations.Secrets{}
+	if s.Secrets != nil {
+		sec = s.Secrets.Get()
+	}
+	sec.HomeAssistant.URL = strings.TrimSpace(view.HomeAssistantURL)
+	sec.OBS.URL = strings.TrimSpace(view.OBSURL)
+	if view.HomeAssistantToken != "" {
+		sec.HomeAssistant.Token = strings.TrimSpace(view.HomeAssistantToken)
+	}
+	if view.OBSPassword != "" {
+		sec.OBS.Password = view.OBSPassword
+	}
+	return sec, nil
+}
+
+func (s *Server) putSecrets(w http.ResponseWriter, r *http.Request) {
+	if s.Secrets == nil {
+		writeDetail(w, http.StatusServiceUnavailable, "secrets not available")
+		return
+	}
+	sec, err := s.mergeSecrets(r)
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.Secrets.Save(sec); err != nil {
+		writeDetail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.getSecrets(w, r)
+}
+
+// testSecrets checks the given (or stored) credentials without saving.
+func (s *Server) testSecrets(w http.ResponseWriter, r *http.Request) {
+	sec, err := s.mergeSecrets(r)
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result := map[string]string{}
+	if sec.HomeAssistant.URL != "" {
+		result["home_assistant"] = "ok"
+		if err := integrations.CheckHomeAssistant(sec.HomeAssistant); err != nil {
+			result["home_assistant"] = err.Error()
+		}
+	}
+	if sec.OBS.URL != "" || sec.OBS.Password != "" {
+		result["obs"] = "ok"
+		if _, err := integrations.NewOBSClient().Request(sec.OBS, "GetVersion", nil); err != nil {
+			result["obs"] = err.Error()
+		}
+	}
+	writeJSON(w, http.StatusOK, result)
 }

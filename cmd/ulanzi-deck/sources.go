@@ -12,8 +12,15 @@ import (
 
 // widgetSources adapts the infrastructure packages to the widget engine.
 type widgetSources struct {
-	runner *actions.Runner
+	runner       *actions.Runner
+	integrations integrationRunner
 }
+
+func (s widgetSources) HomeAssistantState(entityID string) (application.HomeState, error) {
+	return s.integrations.homeState(entityID)
+}
+
+func (s widgetSources) OBSStatus() (application.OBSInfo, error) { return s.integrations.obsStatus() }
 
 func (s widgetSources) CommandOutput(ctx context.Context, cmd string) (string, bool, error) {
 	return s.runner.Output(ctx, cmd)

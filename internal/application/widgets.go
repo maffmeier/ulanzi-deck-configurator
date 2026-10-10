@@ -21,12 +21,38 @@ type MediaInfo struct {
 	ArtURL  string
 }
 
+// HomeState is a Home Assistant entity as widgets show it.
+type HomeState struct {
+	State      string
+	Unit       string
+	Name       string
+	Attributes map[string]any
+}
+
+// OBSInfo is the OBS status as widgets show it.
+type OBSInfo struct {
+	Scene      string
+	Recording  bool
+	RecordTime string
+	Streaming  bool
+	StreamTime string
+}
+
 // WidgetSources are the slow, host-specific inputs of widgets.
 type WidgetSources interface {
 	CommandOutput(ctx context.Context, cmd string) (out string, ok bool, err error)
 	NowPlaying() (MediaInfo, error)
 	Cover(url string) image.Image
 	LoadImage(path string) (image.Image, error)
+	HomeAssistantState(entityID string) (HomeState, error)
+	OBSStatus() (OBSInfo, error)
+}
+
+type polled[T any] struct {
+	value   T
+	err     error
+	at      time.Time
+	running bool
 }
 
 const (
@@ -75,6 +101,8 @@ type WidgetEngine struct {
 	mediaRun bool
 	cover    image.Image
 	images   map[string]cachedImage
+	homes    map[string]*polled[HomeState]
+	obs      polled[OBSInfo]
 }
 
 func NewWidgetEngine(metrics Metrics, sources WidgetSources, renderer Renderer, log *slog.Logger) *WidgetEngine {
@@ -87,6 +115,7 @@ func NewWidgetEngine(metrics Metrics, sources WidgetSources, renderer Renderer, 
 		graphs:   map[string]bool{},
 		commands: map[string]*commandResult{},
 		images:   map[string]cachedImage{},
+		homes:    map[string]*polled[HomeState]{},
 		timer:    timerState{duration: defaultTimerMins * time.Minute, remaining: defaultTimerMins * time.Minute},
 	}
 }
@@ -151,6 +180,10 @@ func (e *WidgetEngine) Render(wd deck.Widget, w, h int, bg string, now time.Time
 		return e.renderTimer(wd, w, h, bg, now)
 	case deck.WidgetMedia:
 		return e.renderMedia(w, h, bg, now)
+	case deck.WidgetHome:
+		return e.renderHome(wd, w, h, bg, now)
+	case deck.WidgetOBS:
+		return e.renderOBS(wd, w, h, bg, now)
 	}
 	return e.renderer.Text(w, h, bg, "", []string{"?"}, false)
 }
@@ -395,4 +428,91 @@ func (e *WidgetEngine) refreshMedia() {
 		return
 	}
 	e.media, e.cover = info, cover
+}
+
+const obsRefresh = time.Second
+
+func (e *WidgetEngine) renderHome(wd deck.Widget, w, h int, bg string, now time.Time) []byte {
+	e.mu.Lock()
+	p := e.homes[wd.EntityID]
+	if p == nil {
+		p = &polled[HomeState]{}
+		e.homes[wd.EntityID] = p
+	}
+	if !p.running && now.Sub(p.at) >= time.Duration(wd.IntervalS*float64(time.Second)) {
+		p.running = true
+		go func(entity string) {
+			state, err := e.sources.HomeAssistantState(entity)
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			if cur := e.homes[entity]; cur != nil {
+				cur.value, cur.err, cur.at, cur.running = state, err, time.Now(), false
+			}
+		}(wd.EntityID)
+	}
+	state, err, at := p.value, p.err, p.at
+	e.mu.Unlock()
+
+	title := wd.Title
+	if title == "" {
+		title = state.Name
+	}
+	switch {
+	case at.IsZero():
+		return e.renderer.Text(w, h, bg, title, []string{"…"}, false)
+	case err != nil:
+		return e.renderer.Text(w, h, bg, title, []string{"HA offline"}, false)
+	}
+	value := state.State
+	if wd.Attribute != "" {
+		value = fmt.Sprint(state.Attributes[wd.Attribute])
+	} else if state.Unit != "" {
+		value += " " + state.Unit
+	}
+	if state.State == wd.ActiveState && wd.OkColor != "" {
+		bg = wd.OkColor
+	}
+	if state.State != wd.ActiveState && wd.FailColor != "" {
+		bg = wd.FailColor
+	}
+	return e.renderer.Text(w, h, bg, title, []string{value}, false)
+}
+
+func (e *WidgetEngine) renderOBS(wd deck.Widget, w, h int, bg string, now time.Time) []byte {
+	e.mu.Lock()
+	if !e.obs.running && now.Sub(e.obs.at) >= obsRefresh {
+		e.obs.running = true
+		go func() {
+			info, err := e.sources.OBSStatus()
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			e.obs.value, e.obs.err, e.obs.at, e.obs.running = info, err, time.Now(), false
+		}()
+	}
+	info, err, at := e.obs.value, e.obs.err, e.obs.at
+	e.mu.Unlock()
+
+	title := wd.Title
+	if title == "" {
+		title = "OBS"
+	}
+	switch {
+	case at.IsZero():
+		return e.renderer.Text(w, h, bg, title, []string{"…"}, false)
+	case err != nil:
+		return e.renderer.Text(w, h, bg, title, []string{"offline"}, false)
+	}
+	active := func(on bool, label, timecode string) []byte {
+		if on {
+			return e.renderer.Text(w, h, "#B91C1C", title, []string{"● " + label, timecode}, true)
+		}
+		return e.renderer.Text(w, h, bg, title, []string{label, "aus"}, true)
+	}
+	switch wd.Show {
+	case "record":
+		return active(info.Recording, "REC", info.RecordTime)
+	case "stream":
+		return active(info.Streaming, "LIVE", info.StreamTime)
+	}
+	return e.renderer.Text(w, h, bg, title, []string{info.Scene}, false)
 }
