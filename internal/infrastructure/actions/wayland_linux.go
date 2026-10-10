@@ -245,6 +245,84 @@ func (v *virtualKeyboard) sendRelease() error {
 	return nil
 }
 
+// Type enters text: every distinct character gets its own keycode in a
+// keymap that maps it straight to its Unicode keysym, so it works for any
+// character regardless of the user's keyboard layout.
+func (v *virtualKeyboard) Type(text string) error {
+	runes := []rune(text)
+	for len(runes) > 0 {
+		// Keycodes stop at 255; split very diverse text into batches.
+		batch, codes := []rune{}, map[rune]int{}
+		for len(runes) > 0 {
+			r := runes[0]
+			if _, ok := codes[r]; !ok {
+				if len(codes) == 200 {
+					break
+				}
+				codes[r] = len(codes) + 1
+			}
+			batch = append(batch, r)
+			runes = runes[1:]
+		}
+		if err := v.typeBatch(batch, codes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func keysymFor(r rune) string {
+	switch r {
+	case '\n':
+		return "Return"
+	case '\t':
+		return "Tab"
+	}
+	return fmt.Sprintf("U%04X", r)
+}
+
+func (v *virtualKeyboard) typeBatch(batch []rune, codes map[rune]int) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.held != nil {
+		_ = v.releaseLocked()
+	}
+	if err := v.connectLocked(); err != nil {
+		return err
+	}
+	ordered := make([]string, len(codes))
+	for r, code := range codes {
+		ordered[code-1] = keysymFor(r)
+	}
+	var keycodes, symbols strings.Builder
+	for i, sym := range ordered {
+		fmt.Fprintf(&keycodes, "<K%d> = %d; ", i+1, i+9)
+		fmt.Fprintf(&symbols, "key <K%d> {[ %s ]}; ", i+1, sym)
+	}
+	keymap := fmt.Sprintf("xkb_keymap {\nxkb_keycodes \"(unnamed)\" { minimum = 8; maximum = %d; %s};\n"+
+		"xkb_types \"(unnamed)\" { include \"complete\" };\nxkb_compatibility \"(unnamed)\" { include \"complete\" };\n"+
+		"xkb_symbols \"(unnamed)\" { %s};\n};\n", len(ordered)+9, keycodes.String(), symbols.String())
+	fd, err := memfd(keymap)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	if err := writeMsg(v.conn, v.keyboard, opVKKeymap, []int{fd}, append(u32(keymapFormatXKBv1), u32(uint32(len(keymap)+1))...)); err != nil {
+		v.resetLocked()
+		return err
+	}
+	for _, r := range batch {
+		code := uint32(codes[r])
+		for _, state := range []uint32{keyPressed, keyReleased} {
+			if err := writeMsg(v.conn, v.keyboard, opVKKey, nil, concat(u32(v.now()), u32(code), u32(state))); err != nil {
+				v.resetLocked()
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Tap presses and releases the combo.
 func (v *virtualKeyboard) Tap(c Combo) error {
 	release, err := v.Press(c)

@@ -51,6 +51,21 @@ func (f *fakeDeck) SetButtons(b []deck.Button, partial bool) error {
 	return nil
 }
 
+// partialLabels returns the labels uploaded for index by partial updates.
+func (f *fakeDeck) partialLabels(index int) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, batch := range f.partials {
+		for _, b := range batch {
+			if b.Index == index {
+				out = append(out, b.Label)
+			}
+		}
+	}
+	return out
+}
+
 // partialData returns the IconData uploaded for index by partial updates.
 func (f *fakeDeck) partialData(index int) []string {
 	f.mu.Lock()

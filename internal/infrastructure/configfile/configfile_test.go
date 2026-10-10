@@ -232,3 +232,64 @@ buttons:
 		}
 	}
 }
+
+func TestNewActionsFoldersAndTogglesRoundTrip(t *testing.T) {
+	text := `default_page: main
+pages:
+  main:
+    buttons:
+      - index: 0
+        label: Licht an
+        action: {type: home_assistant, service: light.turn_on, entity_id: light.kitchen}
+        toggle:
+          label: Licht aus
+          action: {type: home_assistant, service: light.turn_off, entity_id: light.kitchen}
+      - index: 1
+        action:
+          type: multi
+          steps:
+            - {type: shortcut, keys: XF86AudioPlay}
+            - {type: delay, ms: 300}
+            - {type: url, url: https://meet.example.com}
+      - index: 2
+        action: {type: http, method: POST, url: https://hooks.example.com/x, body: '{"a":1}', headers: {Authorization: Bearer t}}
+      - index: 3
+        action: {type: type_text, text: "max@example.com"}
+      - index: 4
+        action: {type: switch_page, page: tools}
+      - index: 5
+        action: {type: obs, op: switch_scene, target: Kamera}
+  tools:
+    folder: true
+    back_index: 12
+    buttons: []
+`
+	cfg, err := Parse([]byte(text), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Pages[1].Folder || cfg.Pages[1].BackIndex != 12 {
+		t.Fatalf("folder lost: %+v", cfg.Pages[1])
+	}
+	data, err := Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := Parse(data, ".")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, data)
+	}
+	b := again.Pages[0].Buttons
+	if b[0].Toggle == nil || b[0].Toggle.Action.Service != "light.turn_off" {
+		t.Fatalf("toggle lost:\n%s", data)
+	}
+	if len(b[1].Action.Steps) != 3 || b[1].Action.Steps[1].Ms != 300 {
+		t.Fatalf("multi lost:\n%s", data)
+	}
+	if b[2].Action.Headers["Authorization"] != "Bearer t" || b[3].Action.Text != "max@example.com" || b[5].Action.Target != "Kamera" {
+		t.Fatalf("actions lost:\n%s", data)
+	}
+	if !again.Pages[1].Folder || again.Pages[1].BackIndex != 12 {
+		t.Fatalf("folder lost:\n%s", data)
+	}
+}

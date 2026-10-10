@@ -9,87 +9,6 @@ import (
 	"strings"
 )
 
-type ActionType string
-
-const (
-	ActionShell      ActionType = "shell"
-	ActionShortcut   ActionType = "shortcut"
-	ActionURL        ActionType = "url"
-	ActionSwitchPage ActionType = "switch_page"
-	ActionPredefined ActionType = "predefined_command"
-	ActionTimer      ActionType = "timer"
-)
-
-// Timer operations for ActionTimer.
-const (
-	TimerToggle = "toggle"
-	TimerStart  = "start"
-	TimerPause  = "pause"
-	TimerReset  = "reset"
-)
-
-type Action struct {
-	Type      ActionType
-	Cmd       string
-	Keys      string
-	URL       string
-	Page      string
-	CommandID string
-	// Op and Minutes drive the shared countdown timer (ActionTimer).
-	Op      string
-	Minutes int
-}
-
-func (a Action) Validate() error {
-	if a.Type == ActionTimer {
-		switch a.Op {
-		case TimerToggle, TimerStart, TimerPause, TimerReset:
-		default:
-			return fmt.Errorf("timer action needs op toggle, start, pause or reset, got %q", a.Op)
-		}
-		if a.Minutes < 0 || a.Minutes > 24*60 {
-			return fmt.Errorf("timer minutes must be in 0..1440, got %d", a.Minutes)
-		}
-		return nil
-	}
-	required := map[ActionType]string{
-		ActionShell:      a.Cmd,
-		ActionShortcut:   a.Keys,
-		ActionURL:        a.URL,
-		ActionSwitchPage: a.Page,
-		ActionPredefined: a.CommandID,
-	}
-	value, known := required[a.Type]
-	if !known {
-		return fmt.Errorf("unknown action type: %q", a.Type)
-	}
-	if strings.TrimSpace(value) == "" {
-		return fmt.Errorf("%s action requires a value", a.Type)
-	}
-	return nil
-}
-
-// Clean drops fields that don't belong to the action type, e.g. a page
-// left over after switching the type in the editor.
-func (a Action) Clean() Action {
-	clean := Action{Type: a.Type}
-	switch a.Type {
-	case ActionShell:
-		clean.Cmd = a.Cmd
-	case ActionShortcut:
-		clean.Keys = a.Keys
-	case ActionURL:
-		clean.URL = a.URL
-	case ActionSwitchPage:
-		clean.Page = a.Page
-	case ActionPredefined:
-		clean.CommandID = a.CommandID
-	case ActionTimer:
-		clean.Op, clean.Minutes = a.Op, a.Minutes
-	}
-	return clean
-}
-
 type TextStyle struct {
 	BackgroundColor string
 	TextColor       string
@@ -159,6 +78,28 @@ type Button struct {
 	LongPress *Action
 	// Live renders a widget onto the key instead of its static icon.
 	Live *Widget
+	// Toggle is the second state of a two-state key; every press flips
+	// between the button itself and this state.
+	Toggle *ToggleState
+}
+
+// ToggleState is what a toggle key shows and does in its "on" state.
+type ToggleState struct {
+	Label        string
+	IconPath     string
+	ResolvedIcon string
+	Action       *Action
+}
+
+// Flipped returns the button as shown in its toggled state.
+func (b Button) Flipped() Button {
+	if b.Toggle == nil {
+		return b
+	}
+	flipped := b
+	flipped.Label, flipped.IconPath, flipped.ResolvedIcon = b.Toggle.Label, b.Toggle.IconPath, b.Toggle.ResolvedIcon
+	flipped.Action = b.Toggle.Action
+	return flipped
 }
 
 type PressMode string
@@ -183,6 +124,16 @@ func (b *Button) ValidateBehavior() error {
 	case PressTap, PressRepeat, PressHold:
 	default:
 		return fmt.Errorf("unknown press mode %q (tap, repeat or hold)", b.Press)
+	}
+	if b.Toggle != nil {
+		if b.Press != PressTap {
+			return fmt.Errorf("toggle keys only work with press: tap")
+		}
+		if b.Toggle.Action != nil {
+			if err := b.Toggle.Action.Validate(); err != nil {
+				return fmt.Errorf("toggle: %w", err)
+			}
+		}
 	}
 	if b.Live != nil {
 		if err := b.Live.Normalize(true); err != nil {
@@ -213,6 +164,21 @@ func (b *Button) ValidateBehavior() error {
 type Page struct {
 	Name    string
 	Buttons []Button
+	// Folder pages are sub pages: paging skips them and they get an
+	// automatic back key at BackIndex unless that index is taken.
+	Folder    bool
+	BackIndex int
+}
+
+// backButton is the automatic key that leaves a folder.
+func backButton(index int) Button {
+	return Button{
+		Index:     index,
+		Label:     "← Zurück",
+		Action:    &Action{Type: ActionSwitchPage, Page: PageBack},
+		TextStyle: DefaultTextStyle(),
+		Press:     PressTap,
+	}
 }
 
 func (p Page) ByIndex(idx int) *Button {
@@ -379,14 +345,9 @@ func (c *Config) HasPage(name string) bool {
 	return ok
 }
 
-// Special switch_page targets that page relative to the current page.
-const (
-	PageNext     = "@next"
-	PagePrevious = "@prev"
-)
-
 // ResolvePageTarget turns a switch_page target into a concrete page name,
-// wrapping around at both ends for @next/@prev.
+// wrapping around at both ends for @next/@prev. Folder pages are skipped
+// when paging; @back is resolved by the daemon, which knows the history.
 func (c *Config) ResolvePageTarget(current, target string) (string, bool) {
 	step := 0
 	switch target {
@@ -397,18 +358,22 @@ func (c *Config) ResolvePageTarget(current, target string) (string, bool) {
 	default:
 		return target, c.HasPage(target)
 	}
-	if len(c.Pages) == 0 {
-		return "", false
-	}
-	pos := 0
-	for i, p := range c.Pages {
-		if p.Name == current {
-			pos = i
-			break
+	var cycle []string
+	for _, p := range c.Pages {
+		if !p.Folder {
+			cycle = append(cycle, p.Name)
 		}
 	}
-	n := len(c.Pages)
-	return c.Pages[((pos+step)%n+n)%n].Name, true
+	if len(cycle) == 0 {
+		return "", false
+	}
+	pos := slices.Index(cycle, current)
+	if pos < 0 {
+		// Leaving a folder by paging starts from the first regular page.
+		return cycle[0], true
+	}
+	n := len(cycle)
+	return cycle[((pos+step)%n+n)%n], true
 }
 
 func (c *Config) PageNames() []string {
@@ -426,7 +391,25 @@ func (c *Config) ButtonsFor(name string) []Button {
 	if !ok {
 		return slices.Clone(c.FixedButtons)
 	}
-	return append(slices.Clone(page.Buttons), c.FixedButtons...)
+	buttons := append(slices.Clone(page.Buttons), c.FixedButtons...)
+	if back, ok := c.autoBack(page); ok {
+		buttons = append(buttons, back)
+	}
+	return buttons
+}
+
+// autoBack returns the folder's back key when its index is free.
+func (c *Config) autoBack(page *Page) (Button, bool) {
+	if !page.Folder {
+		return Button{}, false
+	}
+	taken := func(buttons []Button) bool {
+		return slices.ContainsFunc(buttons, func(b Button) bool { return b.Index == page.BackIndex })
+	}
+	if taken(page.Buttons) || taken(c.FixedButtons) {
+		return Button{}, false
+	}
+	return backButton(page.BackIndex), true
 }
 
 // ButtonAt resolves the button for a physical index; fixed buttons win.
@@ -440,5 +423,11 @@ func (c *Config) ButtonAt(pageName string, index int) *Button {
 	if !ok {
 		return nil
 	}
-	return page.ByIndex(index)
+	if b := page.ByIndex(index); b != nil {
+		return b
+	}
+	if back, ok := c.autoBack(page); ok && back.Index == index {
+		return &back
+	}
+	return nil
 }

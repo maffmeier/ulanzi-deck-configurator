@@ -1,0 +1,192 @@
+package deck
+
+import (
+	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+)
+
+type ActionType string
+
+const (
+	ActionShell      ActionType = "shell"
+	ActionShortcut   ActionType = "shortcut"
+	ActionURL        ActionType = "url"
+	ActionSwitchPage ActionType = "switch_page"
+	ActionPredefined ActionType = "predefined_command"
+	ActionTimer      ActionType = "timer"
+	ActionHTTP       ActionType = "http"
+	ActionTypeText   ActionType = "type_text"
+	ActionMulti      ActionType = "multi"
+	ActionDelay      ActionType = "delay"
+	ActionHome       ActionType = "home_assistant"
+	ActionOBS        ActionType = "obs"
+)
+
+// Timer operations for ActionTimer.
+const (
+	TimerToggle = "toggle"
+	TimerStart  = "start"
+	TimerPause  = "pause"
+	TimerReset  = "reset"
+)
+
+// OBS operations for ActionOBS; Target names the scene or input.
+var OBSOps = []string{
+	"switch_scene", "toggle_record", "start_record", "stop_record",
+	"toggle_stream", "start_stream", "stop_stream", "toggle_mute", "toggle_replay_buffer", "save_replay",
+}
+
+// Special switch_page targets that page relative to the current page.
+const (
+	PageNext     = "@next"
+	PagePrevious = "@prev"
+	// PageBack returns to the page shown before the current one.
+	PageBack = "@back"
+)
+
+const maxMultiSteps = 50
+
+type Action struct {
+	Type      ActionType
+	Cmd       string
+	Keys      string
+	URL       string
+	Page      string
+	CommandID string
+	// Op is the operation of timer and obs actions.
+	Op      string
+	Minutes int
+	// HTTP request.
+	Method  string
+	Body    string
+	Headers map[string]string
+	// Text typed by type_text.
+	Text string
+	// Steps of a multi action, run in order; delay steps pause.
+	Steps []Action
+	Ms    int
+	// Home Assistant service call, e.g. light.toggle on light.kitchen.
+	Service  string
+	EntityID string
+	// Target is the OBS scene or input an op applies to.
+	Target string
+}
+
+func (a Action) Validate() error {
+	return a.validate(false)
+}
+
+func requireValue(t ActionType, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s action requires a value", t)
+	}
+	return nil
+}
+
+func (a Action) validate(inMulti bool) error {
+	switch a.Type {
+	case ActionShell:
+		return requireValue(a.Type, a.Cmd)
+	case ActionShortcut:
+		return requireValue(a.Type, a.Keys)
+	case ActionURL:
+		return requireValue(a.Type, a.URL)
+	case ActionSwitchPage:
+		return requireValue(a.Type, a.Page)
+	case ActionPredefined:
+		return requireValue(a.Type, a.CommandID)
+	case ActionTypeText:
+		return requireValue(a.Type, a.Text)
+	case ActionTimer:
+		switch a.Op {
+		case TimerToggle, TimerStart, TimerPause, TimerReset:
+		default:
+			return fmt.Errorf("timer action needs op toggle, start, pause or reset, got %q", a.Op)
+		}
+		if a.Minutes < 0 || a.Minutes > 24*60 {
+			return fmt.Errorf("timer minutes must be in 0..1440, got %d", a.Minutes)
+		}
+	case ActionHTTP:
+		if !strings.HasPrefix(a.URL, "http://") && !strings.HasPrefix(a.URL, "https://") {
+			return fmt.Errorf("http action needs an http(s) url, got %q", a.URL)
+		}
+		switch strings.ToUpper(a.Method) {
+		case "", http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		default:
+			return fmt.Errorf("unsupported http method %q", a.Method)
+		}
+	case ActionMulti:
+		if inMulti {
+			return fmt.Errorf("multi actions cannot be nested")
+		}
+		if len(a.Steps) == 0 || len(a.Steps) > maxMultiSteps {
+			return fmt.Errorf("multi action needs 1 to %d steps", maxMultiSteps)
+		}
+		for i, step := range a.Steps {
+			if err := step.validate(true); err != nil {
+				return fmt.Errorf("step %d: %w", i+1, err)
+			}
+		}
+	case ActionDelay:
+		if !inMulti {
+			return fmt.Errorf("delay is only allowed inside a multi action")
+		}
+		if a.Ms <= 0 || a.Ms > 60000 {
+			return fmt.Errorf("delay must be 1..60000 ms, got %d", a.Ms)
+		}
+	case ActionHome:
+		if !strings.Contains(a.Service, ".") {
+			return fmt.Errorf("home_assistant action needs a service like light.toggle, got %q", a.Service)
+		}
+	case ActionOBS:
+		if !slices.Contains(OBSOps, a.Op) {
+			return fmt.Errorf("unknown obs op %q", a.Op)
+		}
+		if (a.Op == "switch_scene" || a.Op == "toggle_mute") && strings.TrimSpace(a.Target) == "" {
+			return fmt.Errorf("obs %s needs a target", a.Op)
+		}
+	default:
+		return fmt.Errorf("unknown action type: %q", a.Type)
+	}
+	return nil
+}
+
+// Clean drops fields that don't belong to the action type, e.g. a page
+// left over after switching the type in the editor.
+func (a Action) Clean() Action {
+	clean := Action{Type: a.Type}
+	switch a.Type {
+	case ActionShell:
+		clean.Cmd = a.Cmd
+	case ActionShortcut:
+		clean.Keys = a.Keys
+	case ActionURL:
+		clean.URL = a.URL
+	case ActionSwitchPage:
+		clean.Page = a.Page
+	case ActionPredefined:
+		clean.CommandID = a.CommandID
+	case ActionTimer:
+		clean.Op, clean.Minutes = a.Op, a.Minutes
+	case ActionHTTP:
+		clean.URL, clean.Method, clean.Body = a.URL, strings.ToUpper(a.Method), a.Body
+		if len(a.Headers) > 0 {
+			clean.Headers = a.Headers
+		}
+	case ActionTypeText:
+		clean.Text = a.Text
+	case ActionMulti:
+		for _, s := range a.Steps {
+			clean.Steps = append(clean.Steps, s.Clean())
+		}
+	case ActionDelay:
+		clean.Ms = a.Ms
+	case ActionHome:
+		clean.Service, clean.EntityID = a.Service, a.EntityID
+	case ActionOBS:
+		clean.Op, clean.Target = a.Op, a.Target
+	}
+	return clean
+}

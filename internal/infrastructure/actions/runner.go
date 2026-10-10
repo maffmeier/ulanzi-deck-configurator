@@ -3,9 +3,12 @@ package actions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -41,6 +44,10 @@ func (r *Runner) Run(action deck.Action) error {
 			return err
 		}
 		return r.Run(resolved)
+	case deck.ActionHTTP:
+		return r.httpRequest(action)
+	case deck.ActionTypeText:
+		return r.typeText(action.Text)
 	}
 	return fmt.Errorf("action type %q cannot be executed by the runner", action.Type)
 }
@@ -138,4 +145,43 @@ func (r *Runner) Output(ctx context.Context, command string) (out string, ok boo
 		return "", false, err
 	}
 	return strings.TrimSpace(string(data)), true, nil
+}
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
+// httpRequest fires a webhook; without an explicit method a body means POST.
+func (r *Runner) httpRequest(a deck.Action) error {
+	method := strings.ToUpper(a.Method)
+	if method == "" {
+		method = http.MethodGet
+		if a.Body != "" {
+			method = http.MethodPost
+		}
+	}
+	req, err := http.NewRequest(method, a.URL, strings.NewReader(a.Body))
+	if err != nil {
+		return err
+	}
+	if a.Body != "" {
+		req.Header.Set("Content-Type", "application/json")
+		if !json.Valid([]byte(a.Body)) {
+			req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+		}
+	}
+	for k, v := range a.Headers {
+		req.Header.Set(k, v)
+	}
+	go func() {
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			r.log.Warn("http action failed", "url", a.URL, "error", err)
+			return
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		if resp.StatusCode >= 400 {
+			r.log.Warn("http action returned an error", "url", a.URL, "status", resp.Status)
+		}
+	}()
+	return nil
 }

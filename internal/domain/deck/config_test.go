@@ -1,6 +1,9 @@
 package deck
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func threePages() *Config {
 	return &Config{
@@ -65,7 +68,7 @@ func TestSmallWindowValidation(t *testing.T) {
 
 func TestActionCleanKeepsOnlyRelevantField(t *testing.T) {
 	a := Action{Type: ActionPredefined, CommandID: "media_next", Page: "@next", Cmd: "x"}.Clean()
-	if a != (Action{Type: ActionPredefined, CommandID: "media_next"}) {
+	if !reflect.DeepEqual(a, Action{Type: ActionPredefined, CommandID: "media_next"}) {
 		t.Fatalf("got %+v", a)
 	}
 }
@@ -105,5 +108,75 @@ func TestWidgetCleanDropsForeignFields(t *testing.T) {
 	w := Widget{Type: WidgetClock, Format: "%H", Metric: "cpu", Items: []string{"cpu"}, IntervalS: 9, Cmd: "x"}.Clean()
 	if w.Metric != "" || w.Items != nil || w.Cmd != "" || w.IntervalS != DefaultWidgetInterval || w.Format != "%H" {
 		t.Fatalf("got %+v", w)
+	}
+}
+
+func TestFolderGetsBackKeyAndIsSkippedWhenPaging(t *testing.T) {
+	cfg := threePages()
+	cfg.Pages = append(cfg.Pages, Page{Name: "sub", Folder: true, BackIndex: 4, Buttons: []Button{{Index: 0, Label: "x"}}})
+	if got, _ := cfg.ResolvePageTarget("c", PageNext); got != "a" {
+		t.Fatalf("paging must skip folders, got %q", got)
+	}
+	if got, _ := cfg.ResolvePageTarget("sub", PageNext); got != "a" {
+		t.Fatalf("paging out of a folder starts at the first page, got %q", got)
+	}
+	back := cfg.ButtonAt("sub", 4)
+	if back == nil || back.Action.Page != PageBack {
+		t.Fatalf("folder must get a back key, got %+v", back)
+	}
+	if len(cfg.ButtonsFor("sub")) != 2 {
+		t.Fatal("back key must be rendered")
+	}
+	cfg.Pages[3].Buttons = append(cfg.Pages[3].Buttons, Button{Index: 4, Label: "own"})
+	if b := cfg.ButtonAt("sub", 4); b.Label != "own" {
+		t.Fatal("an own key at the back index wins")
+	}
+}
+
+func TestToggleFlipsVisualsAndAction(t *testing.T) {
+	on := &Action{Type: ActionShell, Cmd: "on"}
+	off := &Action{Type: ActionShell, Cmd: "off"}
+	b := Button{Label: "An", Action: on, Toggle: &ToggleState{Label: "Aus", Action: off}}
+	if err := b.ValidateBehavior(); err != nil {
+		t.Fatal(err)
+	}
+	if f := b.Flipped(); f.Label != "Aus" || f.Action.Cmd != "off" {
+		t.Fatalf("flipped %+v", f)
+	}
+	b.Press = PressRepeat
+	if err := b.ValidateBehavior(); err == nil {
+		t.Fatal("toggle with repeat must fail")
+	}
+}
+
+func TestActionValidation(t *testing.T) {
+	ok := []Action{
+		{Type: ActionHTTP, URL: "https://example.com/hook", Method: "post"},
+		{Type: ActionTypeText, Text: "hallo"},
+		{Type: ActionMulti, Steps: []Action{{Type: ActionShell, Cmd: "a"}, {Type: ActionDelay, Ms: 200}, {Type: ActionSwitchPage, Page: PageBack}}},
+		{Type: ActionHome, Service: "light.toggle", EntityID: "light.kitchen"},
+		{Type: ActionOBS, Op: "switch_scene", Target: "Kamera"},
+		{Type: ActionOBS, Op: "toggle_record"},
+	}
+	for _, a := range ok {
+		if err := a.Validate(); err != nil {
+			t.Fatalf("%+v: %v", a, err)
+		}
+	}
+	bad := []Action{
+		{Type: ActionHTTP, URL: "ftp://x"},
+		{Type: ActionHTTP, URL: "https://x", Method: "TRACE"},
+		{Type: ActionDelay, Ms: 100},
+		{Type: ActionMulti},
+		{Type: ActionMulti, Steps: []Action{{Type: ActionMulti, Steps: []Action{{Type: ActionShell, Cmd: "a"}}}}},
+		{Type: ActionMulti, Steps: []Action{{Type: ActionDelay, Ms: 0}}},
+		{Type: ActionHome, Service: "toggle"},
+		{Type: ActionOBS, Op: "switch_scene"},
+		{Type: ActionOBS, Op: "explode"},
+	}
+	for _, a := range bad {
+		if err := a.Validate(); err == nil {
+			t.Fatalf("%+v must fail", a)
+		}
 	}
 }

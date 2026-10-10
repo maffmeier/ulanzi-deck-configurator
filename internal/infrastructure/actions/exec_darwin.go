@@ -61,3 +61,17 @@ func (r *Runner) sendCombo(c Combo) error {
 func (r *Runner) openURL(url string) error {
 	return r.start("open", url)
 }
+
+// typeText uses System Events keystroke; line breaks become return keys.
+func (r *Runner) typeText(text string) error {
+	quote := func(s string) string {
+		return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+	}
+	lines := strings.Split(text, "\n")
+	parts := make([]string, len(lines))
+	for i, l := range lines {
+		parts[i] = quote(l)
+	}
+	script := `tell application "System Events" to keystroke ` + strings.Join(parts, " & return & ")
+	return r.run("osascript", "-e", script)
+}

@@ -37,10 +37,14 @@ type heldKey struct {
 func (d *Daemon) onPress(index int) {
 	d.mu.Lock()
 	page := d.page
-	button := d.cfg.ButtonAt(page, index)
+	var button *deck.Button
+	if b := d.cfg.ButtonAt(page, index); b != nil {
+		effective := d.effectiveLocked(*b)
+		button = &effective
+	}
 	d.mu.Unlock()
 
-	if button == nil || (button.Action == nil && button.LongPress == nil) {
+	if button == nil || (button.Action == nil && button.LongPress == nil && button.Toggle == nil) {
 		d.log.Debug("no action bound", "index", index, "page", page)
 		return
 	}
@@ -66,7 +70,7 @@ func (d *Daemon) onPress(index int) {
 		key.stop = make(chan struct{})
 		go d.repeat(index, page, *button.Action, key.stop)
 	default:
-		d.execute(*button.Action, index, page)
+		d.tap(*button, index, page)
 		return
 	}
 
@@ -102,8 +106,8 @@ func (d *Daemon) endHold(index int, fireShort bool) {
 	if key.stop != nil {
 		close(key.stop)
 	}
-	if short && fireShort && key.button.Action != nil {
-		d.execute(*key.button.Action, index, key.page)
+	if short && fireShort {
+		d.tap(key.button, index, key.page)
 	}
 }
 
@@ -150,8 +154,32 @@ func (d *Daemon) releaseAll() {
 	}
 }
 
+// tap runs a key's (current) action and flips two-state keys.
+func (d *Daemon) tap(b deck.Button, index int, page string) {
+	if b.Action != nil {
+		d.execute(*b.Action, index, page)
+	}
+	if b.Toggle != nil {
+		d.flipToggle(page, index)
+	}
+}
+
 func (d *Daemon) execute(action deck.Action, index int, page string) {
 	switch action.Type {
+	case deck.ActionMulti:
+		d.runMulti(action, index, page)
+		return
+	case deck.ActionHome, deck.ActionOBS:
+		if d.integrations == nil {
+			d.log.Error("integration not available", "action", action.Type)
+			return
+		}
+		go func() {
+			if err := d.integrations.Run(action); err != nil {
+				d.log.Error("integration action failed", "index", index, "action", action.Type, "error", err)
+			}
+		}()
+		return
 	case deck.ActionSwitchPage:
 		d.SwitchTo(action.Page)
 		return

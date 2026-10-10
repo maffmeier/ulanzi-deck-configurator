@@ -1,9 +1,16 @@
 package actions
 
 import (
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 func TestParseCombo(t *testing.T) {
@@ -101,5 +108,29 @@ func TestLegacyPredefinedIDs(t *testing.T) {
 		if _, err := resolvePredefined(id, "linux"); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
+	}
+}
+
+func TestHTTPActionSendsBodyAndHeaders(t *testing.T) {
+	got := make(chan *http.Request, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		req.Body = io.NopCloser(strings.NewReader(string(body)))
+		req.Header.Set("X-Body", string(body))
+		got <- req
+	}))
+	defer srv.Close()
+	r := &Runner{log: slog.New(slog.DiscardHandler)}
+	err := r.Run(deck.Action{Type: deck.ActionHTTP, URL: srv.URL, Body: `{"a":1}`, Headers: map[string]string{"Authorization": "Bearer x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case req := <-got:
+		if req.Method != http.MethodPost || req.Header.Get("Authorization") != "Bearer x" || req.Header.Get("X-Body") != `{"a":1}` || req.Header.Get("Content-Type") != "application/json" {
+			t.Fatalf("got %s %v", req.Method, req.Header)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("request not sent")
 	}
 }

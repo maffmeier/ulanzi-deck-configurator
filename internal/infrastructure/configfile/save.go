@@ -14,14 +14,29 @@ import (
 )
 
 type outAction struct {
-	Type      string `yaml:"type"`
-	Cmd       string `yaml:"cmd,omitempty"`
-	Keys      string `yaml:"keys,omitempty"`
-	CommandID string `yaml:"command_id,omitempty"`
-	URL       string `yaml:"url,omitempty"`
-	Page      string `yaml:"page,omitempty"`
-	Op        string `yaml:"op,omitempty"`
-	Minutes   int    `yaml:"minutes,omitempty"`
+	Type      string            `yaml:"type"`
+	Cmd       string            `yaml:"cmd,omitempty"`
+	Keys      string            `yaml:"keys,omitempty"`
+	CommandID string            `yaml:"command_id,omitempty"`
+	URL       string            `yaml:"url,omitempty"`
+	Page      string            `yaml:"page,omitempty"`
+	Op        string            `yaml:"op,omitempty"`
+	Minutes   int               `yaml:"minutes,omitempty"`
+	Method    string            `yaml:"method,omitempty"`
+	Body      string            `yaml:"body,omitempty"`
+	Headers   map[string]string `yaml:"headers,omitempty"`
+	Text      string            `yaml:"text,omitempty"`
+	Steps     []outAction       `yaml:"steps,omitempty"`
+	Ms        int               `yaml:"ms,omitempty"`
+	Service   string            `yaml:"service,omitempty"`
+	EntityID  string            `yaml:"entity_id,omitempty"`
+	Target    string            `yaml:"target,omitempty"`
+}
+
+type outToggle struct {
+	Label  string     `yaml:"label,omitempty"`
+	Icon   string     `yaml:"icon,omitempty"`
+	Action *outAction `yaml:"action,omitempty"`
 }
 
 type outWidget struct {
@@ -56,6 +71,7 @@ type outButton struct {
 	Press     string        `yaml:"press,omitempty"`
 	LongPress *outAction    `yaml:"long_press,omitempty"`
 	Live      *outWidget    `yaml:"live,omitempty"`
+	Toggle    *outToggle    `yaml:"toggle,omitempty"`
 }
 
 type outSmallWindow struct {
@@ -72,7 +88,9 @@ type outSmallWindow struct {
 }
 
 type outPage struct {
-	Buttons []outButton `yaml:"buttons"`
+	Folder    bool        `yaml:"folder,omitempty"`
+	BackIndex int         `yaml:"back_index,omitempty"`
+	Buttons   []outButton `yaml:"buttons"`
 }
 
 type outConfig struct {
@@ -113,7 +131,7 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 
 	for _, page := range cfg.Pages {
 		var value yaml.Node
-		if err := value.Encode(outPage{Buttons: outButtons(page.Buttons)}); err != nil {
+		if err := value.Encode(outPage{Folder: page.Folder, BackIndex: page.BackIndex, Buttons: outButtons(page.Buttons)}); err != nil {
 			return nil, err
 		}
 		out.Pages.Content = append(out.Pages.Content,
@@ -156,6 +174,9 @@ func outButtons(buttons []deck.Button) []outButton {
 		ob.Action = toOutAction(b.Action)
 		ob.LongPress = toOutAction(b.LongPress)
 		ob.Live = toOutWidget(b.Live)
+		if t := b.Toggle; t != nil {
+			ob.Toggle = &outToggle{Label: t.Label, Icon: t.IconPath, Action: toOutAction(t.Action)}
+		}
 		if b.Press != "" && b.Press != deck.PressTap {
 			ob.Press = string(b.Press)
 		}
@@ -222,7 +243,7 @@ func toOutAction(a *deck.Action) *outAction {
 	if a == nil {
 		return nil
 	}
-	return &outAction{
+	out := &outAction{
 		Type:      string(a.Type),
 		Cmd:       a.Cmd,
 		Keys:      a.Keys,
@@ -231,7 +252,19 @@ func toOutAction(a *deck.Action) *outAction {
 		Page:      a.Page,
 		Op:        a.Op,
 		Minutes:   a.Minutes,
+		Method:    a.Method,
+		Body:      a.Body,
+		Headers:   a.Headers,
+		Text:      a.Text,
+		Ms:        a.Ms,
+		Service:   a.Service,
+		EntityID:  a.EntityID,
+		Target:    a.Target,
 	}
+	for i := range a.Steps {
+		out.Steps = append(out.Steps, *toOutAction(&a.Steps[i]))
+	}
+	return out
 }
 
 // toOutWidget omits the default interval to keep configs short.

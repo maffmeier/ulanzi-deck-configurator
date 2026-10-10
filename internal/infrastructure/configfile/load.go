@@ -17,14 +17,29 @@ import (
 )
 
 type rawAction struct {
-	Type      string `yaml:"type"`
-	Cmd       string `yaml:"cmd"`
-	Keys      string `yaml:"keys"`
-	URL       string `yaml:"url"`
-	Page      string `yaml:"page"`
-	CommandID string `yaml:"command_id"`
-	Op        string `yaml:"op"`
-	Minutes   int    `yaml:"minutes"`
+	Type      string            `yaml:"type"`
+	Cmd       string            `yaml:"cmd"`
+	Keys      string            `yaml:"keys"`
+	URL       string            `yaml:"url"`
+	Page      string            `yaml:"page"`
+	CommandID string            `yaml:"command_id"`
+	Op        string            `yaml:"op"`
+	Minutes   int               `yaml:"minutes"`
+	Method    string            `yaml:"method"`
+	Body      string            `yaml:"body"`
+	Headers   map[string]string `yaml:"headers"`
+	Text      string            `yaml:"text"`
+	Steps     []rawAction       `yaml:"steps"`
+	Ms        int               `yaml:"ms"`
+	Service   string            `yaml:"service"`
+	EntityID  string            `yaml:"entity_id"`
+	Target    string            `yaml:"target"`
+}
+
+type rawToggle struct {
+	Label  string     `yaml:"label"`
+	Icon   string     `yaml:"icon"`
+	Action *rawAction `yaml:"action"`
 }
 
 type rawWidget struct {
@@ -59,6 +74,7 @@ type rawButton struct {
 	Press     string        `yaml:"press"`
 	LongPress *rawAction    `yaml:"long_press"`
 	Live      *rawWidget    `yaml:"live"`
+	Toggle    *rawToggle    `yaml:"toggle"`
 }
 
 type rawSmallWindow struct {
@@ -75,7 +91,9 @@ type rawSmallWindow struct {
 }
 
 type rawPage struct {
-	Buttons []rawButton `yaml:"buttons"`
+	Buttons   []rawButton `yaml:"buttons"`
+	Folder    bool        `yaml:"folder"`
+	BackIndex int         `yaml:"back_index"`
 }
 
 type rawConfig struct {
@@ -128,7 +146,10 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 			if err != nil {
 				return nil, err
 			}
-			cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons})
+			if page.BackIndex < 0 || page.BackIndex >= deck.ButtonCount {
+				return nil, fmt.Errorf("page %q: back_index must be in 0..%d", name, deck.ButtonCount-1)
+			}
+			cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons, Folder: page.Folder, BackIndex: page.BackIndex})
 		}
 		if cfg.FixedButtons, err = parseButtons(raw.FixedButtons, "fixed_buttons", baseDir); err != nil {
 			return nil, err
@@ -261,6 +282,16 @@ func parseButton(raw rawButton, baseDir string) (deck.Button, error) {
 		return deck.Button{}, fmt.Errorf("long_press: %w", err)
 	}
 	button.Press = deck.PressMode(raw.Press)
+	if raw.Toggle != nil {
+		toggle := &deck.ToggleState{Label: raw.Toggle.Label, IconPath: raw.Toggle.Icon}
+		if raw.Toggle.Icon != "" {
+			toggle.ResolvedIcon = ResolvePath(raw.Toggle.Icon, baseDir)
+		}
+		if toggle.Action, err = parseAction(raw.Toggle.Action); err != nil {
+			return deck.Button{}, fmt.Errorf("toggle: %w", err)
+		}
+		button.Toggle = toggle
+	}
 	if raw.Live != nil {
 		live := toWidget(*raw.Live, baseDir)
 		button.Live = &live
@@ -275,6 +306,14 @@ func parseAction(raw *rawAction) (*deck.Action, error) {
 	if raw == nil {
 		return nil, nil
 	}
+	action := toAction(*raw)
+	if err := action.Validate(); err != nil {
+		return nil, err
+	}
+	return &action, nil
+}
+
+func toAction(raw rawAction) deck.Action {
 	action := deck.Action{
 		Type:      deck.ActionType(raw.Type),
 		Cmd:       raw.Cmd,
@@ -284,11 +323,19 @@ func parseAction(raw *rawAction) (*deck.Action, error) {
 		CommandID: raw.CommandID,
 		Op:        raw.Op,
 		Minutes:   raw.Minutes,
+		Method:    raw.Method,
+		Body:      raw.Body,
+		Headers:   raw.Headers,
+		Text:      raw.Text,
+		Ms:        raw.Ms,
+		Service:   raw.Service,
+		EntityID:  raw.EntityID,
+		Target:    raw.Target,
 	}
-	if err := action.Validate(); err != nil {
-		return nil, err
+	for _, step := range raw.Steps {
+		action.Steps = append(action.Steps, toAction(step))
 	}
-	return &action, nil
+	return action
 }
 
 // ResolvePath expands "~" and makes relative paths absolute against baseDir.

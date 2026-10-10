@@ -102,3 +102,20 @@ func (r *Runner) openURL(url string) error {
 	}
 	return errors.New("no URL opener found (gio or xdg-open)")
 }
+
+func (r *Runner) typeText(text string) error {
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		err := r.virtualKeyboard().Type(text)
+		if err == nil {
+			return nil
+		}
+		r.log.Debug("virtual keyboard unavailable, falling back", "error", err)
+		if _, err := exec.LookPath("wtype"); err == nil {
+			return r.run("wtype", "--", text)
+		}
+	}
+	if _, err := exec.LookPath("xdotool"); err == nil {
+		return r.run("xdotool", "type", "--clearmodifiers", "--delay", "5", "--", text)
+	}
+	return errors.New("typing text needs a wlroots compositor, wtype or xdotool")
+}

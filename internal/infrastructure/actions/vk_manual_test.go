@@ -48,3 +48,15 @@ func TestVirtualKeyboardTapManual(t *testing.T) {
 	// Keep the process (and thus the keyboard) alive like the daemon does.
 	time.Sleep(3 * time.Second)
 }
+
+func TestVirtualKeyboardTypeManual(t *testing.T) {
+	text := os.Getenv("VK_TYPE")
+	if text == "" {
+		t.Skip("VK_TYPE not set")
+	}
+	vk := newVirtualKeyboard(slog.Default())
+	if err := vk.Type(text); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+}

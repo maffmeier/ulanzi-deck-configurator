@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -76,6 +77,13 @@ type Daemon struct {
 	// liveHash remembers what each live key shows, so unchanged keys are
 	// not re-uploaded every second (guarded by mu).
 	liveHash map[int]string
+
+	// history holds the pages left via switch_page, for @back (guarded by mu).
+	history []string
+	// toggled marks two-state keys that are in their second state.
+	toggled map[string]bool
+
+	integrations Integrations
 }
 
 func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, engine *WidgetEngine, cfg *deck.Config, log *slog.Logger) *Daemon {
@@ -86,6 +94,7 @@ func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer
 		renderer:   renderer,
 		engine:     engine,
 		liveHash:   map[int]string{},
+		toggled:    map[string]bool{},
 		log:        log,
 		cfg:        cfg,
 		page:       cfg.DefaultPage,
@@ -129,6 +138,7 @@ func (d *Daemon) ApplyConfig(cfg *deck.Config) {
 	defer d.mu.Unlock()
 	previous := d.page
 	d.cfg = cfg
+	d.history = slices.DeleteFunc(d.history, func(p string) bool { return !cfg.HasPage(p) })
 	if !cfg.HasPage(previous) {
 		d.page = cfg.DefaultPage
 		d.log.Info("page no longer exists, showing default", "previous", previous, "page", d.page)
@@ -138,9 +148,21 @@ func (d *Daemon) ApplyConfig(cfg *deck.Config) {
 	d.poke()
 }
 
+const maxHistory = 20
+
 func (d *Daemon) SwitchTo(target string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if target == deck.PageBack {
+		if len(d.history) == 0 {
+			return
+		}
+		d.page = d.history[len(d.history)-1]
+		d.history = d.history[:len(d.history)-1]
+		d.pushPageLocked()
+		d.log.Info("page switched back", "page", d.page)
+		return
+	}
 	page, ok := d.cfg.ResolvePageTarget(d.page, target)
 	if !ok {
 		d.log.Warn("switch to unknown page", "target", target, "known", d.cfg.PageNames())
@@ -148,6 +170,10 @@ func (d *Daemon) SwitchTo(target string) {
 	}
 	if page == d.page {
 		return
+	}
+	d.history = append(d.history, d.page)
+	if len(d.history) > maxHistory {
+		d.history = d.history[1:]
 	}
 	d.page = page
 	d.pushPageLocked()
@@ -169,6 +195,7 @@ func (d *Daemon) pushPageLocked() {
 		if b.Index >= deck.ButtonCount {
 			continue
 		}
+		b = d.effectiveLocked(b)
 		if b.Live != nil {
 			b.IconData = d.engine.Render(*b.Live, deck.IconSize, deck.IconSize, b.TextStyle.BackgroundColor, now)
 			d.liveHash[b.Index] = pngHash(b.IconData)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"unicode/utf16"
 	"unsafe"
 )
 
@@ -176,4 +177,29 @@ func shellCommand(ctx context.Context, command string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "cmd.exe")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow, CmdLine: `cmd.exe /C ` + command}
 	return cmd
+}
+
+const keyEventUnicode = 0x0004
+
+// typeText sends each UTF-16 unit as a Unicode key event, which works for
+// any character independent of the keyboard layout.
+func (r *Runner) typeText(text string) error {
+	var events []input
+	for _, unit := range utf16.Encode([]rune(text)) {
+		if unit == '\n' {
+			events = append(events, keyEvent(0x0D, false), keyEvent(0x0D, true))
+			continue
+		}
+		for _, up := range []bool{false, true} {
+			flags := uint32(keyEventUnicode)
+			if up {
+				flags |= keyEventKeyUp
+			}
+			events = append(events, input{typ: inputKeyboard, ki: keyboardInput{scan: unit, flags: flags}})
+		}
+	}
+	if len(events) == 0 {
+		return nil
+	}
+	return sendInput(events)
 }

@@ -15,14 +15,30 @@ import (
 // (static/app.js); they mirror the ulanzi-linux web API.
 
 type editorAction struct {
-	Type      string `json:"type"`
-	Cmd       string `json:"cmd"`
-	Keys      string `json:"keys"`
-	CommandID string `json:"command_id"`
-	URL       string `json:"url"`
-	Page      string `json:"page"`
-	Op        string `json:"op"`
-	Minutes   int    `json:"minutes"`
+	Type      string            `json:"type"`
+	Cmd       string            `json:"cmd"`
+	Keys      string            `json:"keys"`
+	CommandID string            `json:"command_id"`
+	URL       string            `json:"url"`
+	Page      string            `json:"page"`
+	Op        string            `json:"op"`
+	Minutes   int               `json:"minutes"`
+	Method    string            `json:"method"`
+	Body      string            `json:"body"`
+	Headers   map[string]string `json:"headers"`
+	Text      string            `json:"text"`
+	Steps     []editorAction    `json:"steps"`
+	Ms        int               `json:"ms"`
+	Service   string            `json:"service"`
+	EntityID  string            `json:"entity_id"`
+	Target    string            `json:"target"`
+}
+
+type editorToggle struct {
+	Label      string        `json:"label"`
+	IconPath   *string       `json:"icon_path"`
+	PreviewURL *string       `json:"preview_url"`
+	Action     *editorAction `json:"action"`
 }
 
 type editorWidget struct {
@@ -58,11 +74,14 @@ type editorButton struct {
 	Press      string          `json:"press"`
 	LongPress  *editorAction   `json:"long_press"`
 	Live       *editorWidget   `json:"live"`
+	Toggle     *editorToggle   `json:"toggle"`
 }
 
 type editorPage struct {
-	Name    string         `json:"name"`
-	Buttons []editorButton `json:"buttons"`
+	Name      string         `json:"name"`
+	Buttons   []editorButton `json:"buttons"`
+	Folder    bool           `json:"folder"`
+	BackIndex int            `json:"back_index"`
 }
 
 type editorSmallWindow struct {
@@ -189,11 +208,52 @@ func toEditorButton(b deck.Button) editorButton {
 		live := toEditorWidget(*b.Live)
 		eb.Live = &live
 	}
+	if t := b.Toggle; t != nil {
+		et := &editorToggle{Label: t.Label}
+		if t.IconPath != "" {
+			compact := configfile.CompactPath(t.ResolvedIcon)
+			et.IconPath, et.PreviewURL = &compact, assetPreviewURL(compact)
+		}
+		if t.Action != nil {
+			ta := toEditorAction(*t.Action)
+			et.Action = &ta
+		}
+		eb.Toggle = et
+	}
 	return eb
 }
 
 func toEditorAction(a deck.Action) editorAction {
-	return editorAction{Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page, Op: a.Op, Minutes: a.Minutes}
+	ea := editorAction{
+		Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page,
+		Op: a.Op, Minutes: a.Minutes, Method: a.Method, Body: a.Body, Headers: a.Headers, Text: a.Text,
+		Ms: a.Ms, Service: a.Service, EntityID: a.EntityID, Target: a.Target, Steps: []editorAction{},
+	}
+	for _, step := range a.Steps {
+		ea.Steps = append(ea.Steps, toEditorAction(step))
+	}
+	return ea
+}
+
+func toAction(ea editorAction) deck.Action {
+	a := deck.Action{
+		Type: deck.ActionType(ea.Type), Cmd: ea.Cmd, Keys: ea.Keys, CommandID: ea.CommandID, URL: ea.URL,
+		Page: ea.Page, Op: ea.Op, Minutes: ea.Minutes, Method: ea.Method, Body: ea.Body, Text: ea.Text,
+		Ms: ea.Ms, Service: strings.TrimSpace(ea.Service), EntityID: strings.TrimSpace(ea.EntityID), Target: ea.Target,
+	}
+	headers := map[string]string{}
+	for k, v := range ea.Headers {
+		if k = strings.TrimSpace(k); k != "" {
+			headers[k] = v
+		}
+	}
+	if len(headers) > 0 {
+		a.Headers = headers
+	}
+	for _, step := range ea.Steps {
+		a.Steps = append(a.Steps, toAction(step))
+	}
+	return a
 }
 
 func toEditorWidget(w deck.Widget) editorWidget {
@@ -227,16 +287,7 @@ func fromEditorAction(ea editorAction) (*deck.Action, error) {
 	if ea.Type == "" || ea.Type == "none" {
 		return nil, nil
 	}
-	a := deck.Action{
-		Type:      deck.ActionType(ea.Type),
-		Cmd:       ea.Cmd,
-		Keys:      ea.Keys,
-		CommandID: ea.CommandID,
-		URL:       ea.URL,
-		Page:      ea.Page,
-		Op:        ea.Op,
-		Minutes:   ea.Minutes,
-	}
+	a := toAction(ea)
 	if err := a.Validate(); err != nil {
 		return nil, err
 	}
@@ -266,7 +317,7 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 		},
 	}
 	for _, p := range cfg.Pages {
-		page := editorPage{Name: p.Name, Buttons: []editorButton{}}
+		page := editorPage{Name: p.Name, Buttons: []editorButton{}, Folder: p.Folder, BackIndex: p.BackIndex}
 		for _, b := range p.Buttons {
 			page.Buttons = append(page.Buttons, toEditorButton(b))
 		}
@@ -355,6 +406,18 @@ func fromEditorButtons(buttons []editorButton, scope string, skip map[int]bool) 
 			}
 		}
 		b.Press = deck.PressMode(eb.Press)
+		if et := eb.Toggle; et != nil && eb.Index != deck.InfoWindowIndex {
+			toggle := &deck.ToggleState{Label: et.Label}
+			if et.IconPath != nil {
+				toggle.IconPath = strings.TrimSpace(*et.IconPath)
+			}
+			if et.Action != nil {
+				if toggle.Action, err = fromEditorAction(*et.Action); err != nil {
+					return nil, fmt.Errorf("%s, zweiter Zustand: %w", where, err)
+				}
+			}
+			b.Toggle = toggle
+		}
 		if eb.Live != nil && eb.Live.Type != "" && eb.Live.Type != "none" && eb.Index != deck.InfoWindowIndex {
 			live, err := fromEditorWidget(*eb.Live, true, "")
 			if err != nil {
@@ -408,7 +471,7 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons})
+		cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons, Folder: p.Folder, BackIndex: p.BackIndex})
 	}
 	if len(cfg.Pages) == 0 {
 		return nil, errors.New("at least one page is required")

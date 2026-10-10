@@ -152,6 +152,7 @@ function normalizeButton(raw) {
         press: raw.press || "tap",
         long_press: { ...emptyAction(), ...(raw.long_press || {}) },
         live: normalizeWidget(raw.live),
+        toggle: raw.toggle ? { label: raw.toggle.label || "", icon_path: raw.toggle.icon_path || "", preview_url: raw.toggle.preview_url || "", action: { ...emptyAction(), ...(raw.toggle.action || {}) } } : null,
     };
 }
 
@@ -239,7 +240,7 @@ window.deckApp = function deckApp() {
                 path: payload.path,
                 default_page: payload.default_page,
                 brightness: Number.isFinite(payload.brightness) ? payload.brightness : 50,
-                pages: (payload.pages || []).map((p) => ({ name: p.name, buttons: (p.buttons || []).map(normalizeButton) })),
+                pages: (payload.pages || []).map((p) => ({ name: p.name, folder: Boolean(p.folder), back_index: p.back_index || 0, buttons: (p.buttons || []).map(normalizeButton) })),
                 fixed_buttons: (payload.fixed_buttons || []).map(normalizeButton),
                 small_window: {
                     enabled: Boolean(sw.enabled),
@@ -274,6 +275,7 @@ window.deckApp = function deckApp() {
                 press: b.press || "tap",
                 long_press: b.press === "tap" && b.long_press?.type !== "none" ? b.long_press : null,
                 live: b.live && b.live.type !== "none" ? { ...b.live, interval_s: Number(b.live.interval_s) } : null,
+                toggle: b.toggle ? { label: b.toggle.label, icon_path: b.toggle.icon_path || null, action: b.toggle.action?.type !== "none" ? b.toggle.action : null } : null,
             }));
         },
 
@@ -282,7 +284,7 @@ window.deckApp = function deckApp() {
             return {
                 default_page: this.editor.default_page,
                 brightness: Number(this.editor.brightness),
-                pages: this.editor.pages.map((p) => ({ name: p.name, buttons: this.serializeButtons(p.buttons) })),
+                pages: this.editor.pages.map((p) => ({ name: p.name, folder: p.folder, back_index: Number(p.back_index) || 0, buttons: this.serializeButtons(p.buttons) })),
                 fixed_buttons: this.serializeButtons(this.editor.fixed_buttons),
                 small_window: {
                     ...sw,
