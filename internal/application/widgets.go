@@ -103,6 +103,21 @@ type WidgetEngine struct {
 	images   map[string]cachedImage
 	homes    map[string]*polled[HomeState]
 	obs      polled[OBSInfo]
+	lang     string
+}
+
+// SetLanguage selects the language of texts drawn by widgets.
+func (e *WidgetEngine) SetLanguage(lang string) {
+	e.mu.Lock()
+	e.lang = lang
+	e.mu.Unlock()
+}
+
+func (e *WidgetEngine) text(key string) string {
+	e.mu.Lock()
+	lang := e.lang
+	e.mu.Unlock()
+	return deck.DeckText(lang, key)
 }
 
 func NewWidgetEngine(metrics Metrics, sources WidgetSources, renderer Renderer, log *slog.Logger) *WidgetEngine {
@@ -216,7 +231,7 @@ func (e *WidgetEngine) renderCommand(wd deck.Widget, w, h int, bg string, now ti
 	case at.IsZero():
 		lines = []string{"…"}
 	case err != nil:
-		lines = []string{"Fehler"}
+		lines = []string{e.text("error")}
 	case out != "":
 		lines = strings.Split(out, "\n")
 		if len(lines) > 4 {
@@ -256,7 +271,7 @@ func (e *WidgetEngine) renderGraph(wd deck.Widget, w, h int, bg string) []byte {
 
 	title := wd.Title
 	if title == "" {
-		title = map[string]string{"cpu": "CPU", "memory": "RAM", "network": "Netzwerk"}[wd.Metric]
+		title = e.text(wd.Metric)
 	}
 	maxValue, value := 100.0, "–"
 	if len(samples) > 0 {
@@ -301,7 +316,7 @@ func (e *WidgetEngine) renderImage(wd deck.Widget, w, h int, bg string, now time
 	path := paths[int(step%int64(len(paths)))]
 	img := e.image(path, now)
 	if img == nil {
-		return e.renderer.Text(w, h, bg, "", []string{"Bild fehlt"}, false)
+		return e.renderer.Text(w, h, bg, "", []string{e.text("imageMissing")}, false)
 	}
 	return e.renderer.Image(w, h, bg, img)
 }
@@ -381,11 +396,11 @@ func (e *WidgetEngine) renderTimer(wd deck.Widget, w, h int, bg string, now time
 	}
 	title := wd.Title
 	if title == "" {
-		title = "Timer"
+		title = e.text("timer")
 	}
 	text := formatDuration(remaining)
 	if t.running && remaining == 0 {
-		text = "Fertig"
+		text = e.text("done")
 	}
 	progress := 0.0
 	if t.duration > 0 {
@@ -411,7 +426,11 @@ func (e *WidgetEngine) renderMedia(w, h int, bg string, now time.Time) []byte {
 	}
 	info, cover := e.media, e.cover
 	e.mu.Unlock()
-	return e.renderer.Media(w, h, bg, info.Title, info.Artist, cover)
+	title := info.Title
+	if title == "" {
+		title = e.text("nothingPlaying")
+	}
+	return e.renderer.Media(w, h, bg, title, info.Artist, cover)
 }
 
 func (e *WidgetEngine) refreshMedia() {
@@ -461,7 +480,7 @@ func (e *WidgetEngine) renderHome(wd deck.Widget, w, h int, bg string, now time.
 	case at.IsZero():
 		return e.renderer.Text(w, h, bg, title, []string{"…"}, false)
 	case err != nil:
-		return e.renderer.Text(w, h, bg, title, []string{"HA offline"}, false)
+		return e.renderer.Text(w, h, bg, title, []string{e.text("haOffline")}, false)
 	}
 	value := state.State
 	if wd.Attribute != "" {
@@ -500,13 +519,13 @@ func (e *WidgetEngine) renderOBS(wd deck.Widget, w, h int, bg string, now time.T
 	case at.IsZero():
 		return e.renderer.Text(w, h, bg, title, []string{"…"}, false)
 	case err != nil:
-		return e.renderer.Text(w, h, bg, title, []string{"offline"}, false)
+		return e.renderer.Text(w, h, bg, title, []string{e.text("offline")}, false)
 	}
 	active := func(on bool, label, timecode string) []byte {
 		if on {
 			return e.renderer.Text(w, h, "#B91C1C", title, []string{"● " + label, timecode}, true)
 		}
-		return e.renderer.Text(w, h, bg, title, []string{label, "aus"}, true)
+		return e.renderer.Text(w, h, bg, title, []string{label, e.text("off")}, true)
 	}
 	switch wd.Show {
 	case "record":

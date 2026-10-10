@@ -118,6 +118,7 @@ type editorConfig struct {
 	DefaultPage             string            `json:"default_page"`
 	Brightness              int               `json:"brightness"`
 	Display                 editorDisplay     `json:"display"`
+	Language                string            `json:"language"`
 	Pages                   []editorPage      `json:"pages"`
 	FixedButtons            []editorButton    `json:"fixed_buttons"`
 	SmallWindow             editorSmallWindow `json:"small_window"`
@@ -129,6 +130,7 @@ type editorPutRequest struct {
 	DefaultPage        string            `json:"default_page"`
 	Brightness         *int              `json:"brightness"`
 	Display            editorDisplay     `json:"display"`
+	Language           string            `json:"language"`
 	Pages              []editorPage      `json:"pages"`
 	FixedButtons       []editorButton    `json:"fixed_buttons"`
 	SmallWindow        editorSmallWindow `json:"small_window"`
@@ -322,6 +324,7 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 		DefaultPage:  cfg.DefaultPage,
 		Brightness:   cfg.Brightness,
 		Display:      toEditorDisplay(cfg.Display),
+		Language:     cfg.Language,
 		Pages:        []editorPage{},
 		FixedButtons: []editorButton{},
 		SmallWindow: editorSmallWindow{
@@ -506,6 +509,7 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 		cfg.Brightness = *req.Brightness
 	}
 	cfg.Display = fromEditorDisplay(req.Display)
+	cfg.Language = req.Language
 	var names []string
 	for _, p := range req.Pages {
 		name := strings.TrimSpace(p.Name)

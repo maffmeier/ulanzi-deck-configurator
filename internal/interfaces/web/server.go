@@ -43,6 +43,7 @@ type Server struct {
 	Connected  func() bool
 	Widgets    *application.WidgetEngine
 	Secrets    *integrations.SecretStore
+	RecentApps func() []string
 	Log        *slog.Logger
 }
 
@@ -66,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/predefined", s.predefined)
 	mux.HandleFunc("POST /api/render/widget", s.renderWidget)
 	mux.HandleFunc("GET /api/secrets", s.getSecrets)
+	mux.HandleFunc("GET /api/desktop/recent-apps", s.recentApps)
 	mux.HandleFunc("PUT /api/secrets", s.putSecrets)
 	mux.HandleFunc("POST /api/secrets/test", s.testSecrets)
 	mux.HandleFunc("POST /api/assets", s.uploadAsset)
@@ -131,7 +133,7 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	page := string(html)
-	for _, asset := range []string{"app.js", "app.css", "alpine.min.js"} {
+	for _, asset := range []string{"app.js", "app.css", "i18n.js", "alpine.min.js"} {
 		data, err := staticFiles.ReadFile("static/" + asset)
 		if err != nil {
 			continue
@@ -610,4 +612,12 @@ func (s *Server) testSecrets(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) recentApps(w http.ResponseWriter, _ *http.Request) {
+	apps := []string{}
+	if s.RecentApps != nil {
+		apps = append(apps, s.RecentApps()...)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": apps})
 }

@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -52,6 +53,11 @@ Optionen für run:
 
 func main() {
 	attachConsole()
+	if strings.HasPrefix(strings.ToLower(systemLocale()), "de") {
+		deck.SystemLanguage = "de"
+	} else {
+		deck.SystemLanguage = "en"
+	}
 
 	args := os.Args[1:]
 	command := "run"
@@ -243,6 +249,7 @@ func runCommand(args []string) error {
 		Connected:  dev.Connected,
 		Widgets:    engine,
 		Secrets:    secrets,
+		RecentApps: daemon.RecentApps,
 		Log:        log.With("component", "web"),
 	}
 	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second}

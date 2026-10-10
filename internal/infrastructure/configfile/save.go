@@ -115,6 +115,7 @@ type outConfig struct {
 	DefaultPage  string         `yaml:"default_page"`
 	Brightness   *int           `yaml:"brightness,omitempty"`
 	Display      *outDisplay    `yaml:"display,omitempty"`
+	Language     string         `yaml:"language,omitempty"`
 	SmallWindow  outSmallWindow `yaml:"small_window"`
 	Pages        yaml.Node      `yaml:"pages"`
 	FixedButtons []outButton    `yaml:"fixed_buttons,omitempty"`
@@ -125,6 +126,7 @@ type outConfig struct {
 func Marshal(cfg *deck.Config) ([]byte, error) {
 	out := outConfig{
 		DefaultPage: cfg.DefaultPage,
+		Language:    cfg.Language,
 		SmallWindow: outSmallWindow{
 			Enabled:            cfg.SmallWindow.Enabled,
 			IntervalS:          cfg.SmallWindow.IntervalS,

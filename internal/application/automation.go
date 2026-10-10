@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -74,32 +75,58 @@ func (d *Daemon) appLoop(ctx context.Context) {
 	if d.desktop == nil {
 		return
 	}
-	ticker := time.NewTicker(appInterval)
-	defer ticker.Stop()
 	var lastApp string
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
 		d.mu.Lock()
 		enabled := d.cfg.UsesAppPages()
 		d.mu.Unlock()
+		// Without app pages we only feed the "recently active" list of the
+		// editor, so a slower poll is enough.
+		wait := appInterval
 		if !enabled {
-			continue
+			wait = 3 * appInterval
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
 		}
 		app, err := d.desktop.ActiveApp()
 		if errors.Is(err, ErrDesktopUnsupported) {
-			d.log.Info("app-specific pages not supported on this desktop")
+			d.log.Info("active app not available on this desktop")
 			return
 		}
 		if err != nil || app == lastApp {
 			continue
 		}
 		lastApp = app
-		d.followApp(app)
+		d.rememberApp(app)
+		if enabled {
+			d.followApp(app)
+		}
 	}
+}
+
+const maxRecentApps = 8
+
+func (d *Daemon) rememberApp(app string) {
+	if app == "" {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.recentApps = slices.DeleteFunc(d.recentApps, func(a string) bool { return a == app })
+	d.recentApps = append([]string{app}, d.recentApps...)
+	if len(d.recentApps) > maxRecentApps {
+		d.recentApps = d.recentApps[:maxRecentApps]
+	}
+}
+
+// RecentApps lists the most recently focused applications, newest first.
+func (d *Daemon) RecentApps() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.recentApps)
 }
 
 func (d *Daemon) followApp(app string) {

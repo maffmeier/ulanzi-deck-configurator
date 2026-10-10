@@ -9,7 +9,7 @@
 </head>
 <body x-data="deckApp()" x-init="init()" @keydown.window="onKey($event)">
 
-<!-- ───────────── Kopfleiste ───────────── -->
+<!-- ───────────── Header ───────────── -->
 <header class="topbar">
   <div class="brand">
     <img src="/static/favicon.png" alt="" />
@@ -18,61 +18,63 @@
 
   <template x-if="editor">
   <nav class="pages">
-    <template x-for="page in editor?.pages || []" :key="page.name">
+    <template x-for="page in editor.pages" :key="page.name">
       <button class="page-tab"
-              :class="{ active: page.name === currentPage, home: page.name === editor.default_page }"
+              :class="{ active: page.name === currentPage, folder: page.folder }"
               @click="selectPage(page.name)"
-              @dblclick="renamePage(page.name)"
+              @dblclick="openPageSettings(page.name)"
               @dragover.prevent="dragOverPage = page.name"
               @dragleave="dragOverPage = null"
               @drop.prevent="dropOnPage($event, page.name)"
               :data-over="dragOverPage === page.name"
-              :title="page.name === editor.default_page ? 'Startseite · Doppelklick zum Umbenennen' : 'Doppelklick zum Umbenennen'">
+              :title="pageTabTitle(page)">
         <span x-show="page.name === editor.default_page" class="home-dot" aria-hidden="true">⌂</span>
+        <span x-show="page.folder" aria-hidden="true">📁</span>
         <span x-text="page.name"></span>
+        <span x-show="page.apps.length" class="app-dot" aria-hidden="true">◉</span>
       </button>
     </template>
-    <button class="page-add" @click="addPage()" title="Neue Seite">+</button>
+    <button class="page-add" @click="addPage()" :title="t('page.add')">+</button>
   </nav>
   </template>
   <template x-if="editor">
     <div class="page-menu" x-data="{ open: false }" @click.outside="open = false">
-      <button class="icon-btn" @click="open = !open" title="Seitenoptionen">⋯</button>
+      <button class="icon-btn" @click="open = !open" :title="t('page.options')">⋯</button>
       <div class="menu" x-show="open" x-transition.opacity>
-        <div class="menu-title" x-text="`Seite „${currentPage}“`"></div>
-        <button @click="open = false; renamePage(currentPage)">Umbenennen</button>
-        <button @click="open = false; editor.default_page = currentPage; markDirty()" :disabled="editor?.default_page === currentPage">Als Startseite festlegen</button>
-        <button @click="open = false; movePage(-1)" :disabled="pageNames().indexOf(currentPage) === 0">Nach links verschieben</button>
-        <button @click="open = false; movePage(1)" :disabled="pageNames().indexOf(currentPage) === pageNames().length - 1">Nach rechts verschieben</button>
+        <div class="menu-title" x-text="t('page.menuTitle', { name: currentPage })"></div>
+        <button @click="open = false; openPageSettings(currentPage)" x-text="t('page.settings')"></button>
+        <button @click="open = false; editor.default_page = currentPage; markDirty()" :disabled="editor.default_page === currentPage" x-text="t('page.makeDefault')"></button>
+        <button @click="open = false; movePage(-1)" :disabled="pageNames().indexOf(currentPage) === 0" x-text="t('page.moveLeft')"></button>
+        <button @click="open = false; movePage(1)" :disabled="pageNames().indexOf(currentPage) === pageNames().length - 1" x-text="t('page.moveRight')"></button>
         <hr />
-        <button class="danger" @click="open = false; removePage()" :disabled="editor?.pages.length <= 1">Seite löschen</button>
+        <button class="danger" @click="open = false; removePage()" :disabled="editor.pages.length <= 1" x-text="t('page.delete')"></button>
       </div>
     </div>
   </template>
 
   <div class="top-actions">
     <template x-if="editor">
-    <label class="brightness" title="Helligkeit des Displays">
+    <label class="brightness" :title="t('top.brightness')">
       <span aria-hidden="true">☀</span>
       <input type="range" min="0" max="100" step="5" x-model.number="editor.brightness" @input="markDirty()" />
       <output x-text="editor.brightness + '%'"></output>
     </label>
     </template>
     <span class="conn" :class="health.deck_connected ? 'on' : 'off'"
-          :title="health.deck_connected ? 'Deck verbunden' : 'Kein Deck verbunden'">
-      <i></i><span x-text="health.deck_connected ? 'Verbunden' : 'Getrennt'"></span>
+          :title="t(health.deck_connected ? 'top.connectedLong' : 'top.disconnectedLong')">
+      <i></i><span x-text="t(health.deck_connected ? 'top.connected' : 'top.disconnected')"></span>
     </span>
-    <button class="ghost" @click="reload()" :disabled="busy || !dirty" title="Ungespeicherte Änderungen verwerfen">Verwerfen</button>
-    <button class="primary" @click="save()" :disabled="busy || !dirty">
-      <span x-text="dirty ? 'Speichern' : 'Gespeichert'"></span>
-    </button>
+    <button class="icon-btn lang" @click="setLang(lang === 'de' ? 'en' : 'de')" :title="t('top.language')" x-text="lang === 'de' ? 'EN' : 'DE'"></button>
+    <button class="icon-btn" @click="openSettings('general')" :title="t('settings.title')">⚙</button>
+    <button class="ghost" @click="reload()" :disabled="busy || !dirty" :title="t('top.discardHint')" x-text="t('top.discard')"></button>
+    <button class="primary" @click="save()" :disabled="busy || !dirty" x-text="t(dirty ? 'top.save' : 'top.saved')"></button>
   </div>
 </header>
 
 <template x-if="editor">
 <main class="layout">
 
-  <!-- ───────────── Gerät ───────────── -->
+  <!-- ───────────── Device ───────────── -->
   <section class="stage" @click.self="selected = null">
     <div class="device">
       <div class="device-grid">
@@ -95,7 +97,7 @@
                   <img class="widget-img" :src="previews.info" alt="" draggable="false" />
                 </template>
                 <template x-if="!editor.small_window.enabled">
-                  <span class="info-off">Infofenster aus</span>
+                  <span class="info-off" x-text="t('info.off')"></span>
                 </template>
                 <template x-if="editor.small_window.enabled && !editor.small_window.widgets.length && infoShowsStats()">
                   <div class="info-stats">
@@ -111,15 +113,15 @@
             </template>
 
             <template x-if="slot.kind !== 'info'">
-              <div class="key-face" :class="{ live: hasLive(button(slot.index)) }" :style="faceStyle(button(slot.index))">
-                <template x-if="hasLive(button(slot.index)) && previews['key-' + slot.index]">
+              <div class="key-face" :class="{ live: hasLive(shown(slot.index)) }" :style="faceStyle(shown(slot.index))">
+                <template x-if="hasLive(shown(slot.index)) && previews['key-' + slot.index]">
                   <img :src="previews['key-' + slot.index]" alt="" draggable="false" />
                 </template>
-                <template x-if="!hasLive(button(slot.index)) && button(slot.index)?.preview_url">
-                  <img :src="button(slot.index).preview_url" alt="" draggable="false" />
+                <template x-if="!hasLive(shown(slot.index)) && shown(slot.index)?.preview_url">
+                  <img :src="shown(slot.index).preview_url" alt="" draggable="false" />
                 </template>
-                <template x-if="!hasLive(button(slot.index)) && !button(slot.index)?.preview_url && button(slot.index)?.label">
-                  <span class="key-label" :style="labelStyle(button(slot.index))" x-text="button(slot.index).label"></span>
+                <template x-if="!hasLive(shown(slot.index)) && !shown(slot.index)?.preview_url && shown(slot.index)?.label">
+                  <span class="key-label" :style="labelStyle(shown(slot.index))" x-text="shown(slot.index).label"></span>
                 </template>
               </div>
             </template>
@@ -127,7 +129,7 @@
             <button class="key-pin"
                     :class="{ on: isFixed(slot.index) }"
                     @click.stop="select(slot.index); toggleFixed()"
-                    :title="isFixed(slot.index) ? 'Angepinnt: auf allen Seiten. Klicken zum Lösen' : 'Anpinnen: auf allen Seiten anzeigen'">📌</button>
+                    :title="t(isFixed(slot.index) ? 'key.pinnedHint' : 'key.pinHint')">📌</button>
             <span class="badge behavior" x-show="pressBadge(button(slot.index))" x-text="pressBadge(button(slot.index))"></span>
             <span class="badge action" x-show="button(slot.index)?.action?.type && button(slot.index).action.type !== 'none'">
               <img :src="actionIconUrl(button(slot.index)?.action)" alt="" />
@@ -138,17 +140,16 @@
       <div class="device-brand">ULANZI</div>
     </div>
 
-    <p class="stage-hint" x-show="selected === null">
-      Ziehe eine Aktion von rechts auf eine Taste – oder klicke eine Taste an, um sie zu bearbeiten.
-      Tasten lassen sich per Drag &amp; Drop verschieben, Bilder direkt aus dem Dateimanager draufziehen.
-      Mit 📌 pinnst du eine Taste auf alle Seiten.
-    </p>
+    <div class="stage-tools" x-show="hasToggles()">
+      <label class="check"><input type="checkbox" x-model="previewToggled" /> <span x-text="t('key.previewSecond')"></span></label>
+    </div>
+    <p class="stage-hint" x-show="selected === null" x-text="t('stage.hint')"></p>
   </section>
 
-  <!-- ───────────── Aktionsliste ───────────── -->
+  <!-- ───────────── Action list ───────────── -->
   <aside class="actions-panel">
-    <input class="search" type="search" placeholder="Aktionen suchen …" x-model="actionQuery" />
-    <template x-for="group in filteredActionGroups()" :key="group.name">
+    <input class="search" type="search" :placeholder="t('actions.search')" x-model="actionQuery" />
+    <template x-for="group in filteredActionGroups()" :key="group.id">
       <details class="action-group" open>
         <summary x-text="group.name"></summary>
         <template x-for="preset in group.items" :key="preset.id">
@@ -156,7 +157,7 @@
                draggable="true"
                @dragstart="dragPreset($event, preset)"
                @dblclick="applyPresetToSelected(preset)"
-               :title="preset.hint + ' · Doppelklick: auf ausgewählte Taste anwenden'">
+               :title="preset.hint + ' · ' + t('actions.dblclick')">
             <img :src="iconUrl(preset.icon)" alt="" draggable="false" />
             <span x-text="preset.label"></span>
           </div>
@@ -165,18 +166,17 @@
     </template>
   </aside>
 
-  <!-- ───────────── Eigenschaften ───────────── -->
+  <!-- ───────────── Inspector ───────────── -->
   <section class="inspector">
     <template x-if="selected === null">
       <div class="inspector-empty">
         <div>
-          <h3>Keine Taste ausgewählt</h3>
-          <p>Wähle oben eine Taste oder das Infofenster aus.</p>
+          <h3 x-text="t('inspector.noneTitle')"></h3>
+          <p x-text="t('inspector.noneText')"></p>
         </div>
         <div class="file-info">
-          <span>Konfiguration</span>
-          <code x-text="editor?.path"></code>
-          <label class="check"><input type="checkbox" x-model="saveBundle" /> Beim Speichern zusätzlich das Upload-ZIP ablegen</label>
+          <span x-text="t('inspector.config')"></span>
+          <code x-text="editor.path"></code>
         </div>
       </div>
     </template>
@@ -193,167 +193,106 @@
             </div>
           </div>
           <div class="preview-buttons">
-            <button @click="$refs.upload.click()" title="Bild hochladen">Bild …</button>
-            <button @click="openCatalog()" title="Icon aus dem Katalog">Katalog …</button>
-            <button class="ghost" @click="cur.icon_path = ''; cur.preview_url = ''; markDirty()" x-show="cur.icon_path">Bild entfernen</button>
-            <input type="file" accept="image/*" x-ref="upload" hidden @change="uploadIcon($event.target.files[0]); $event.target.value = ''" />
+            <button @click="pickImage('main')" :title="t('key.uploadHint')" x-text="t('key.image')"></button>
+            <button @click="openCatalog('main')" :title="t('key.catalogHint')" x-text="t('key.catalog')"></button>
+            <button class="ghost" @click="cur.icon_path = ''; cur.preview_url = ''; markDirty()" x-show="cur.icon_path" x-text="t('key.removeImage')"></button>
           </div>
         </div>
 
         <div class="props-main">
           <div class="props-head">
-            <h3 x-text="'Taste ' + (selected + 1)"></h3>
-            <button class="pin-toggle" :class="{ on: isFixed(selected) }" @click="toggleFixed()"
-                    title="Angepinnte Tasten erscheinen auf allen Seiten an derselben Position">
-              📌 <span x-text="isFixed(selected) ? 'Angepinnt (alle Seiten)' : 'Anpinnen'"></span>
+            <h3 x-text="t('key.title', { n: selected + 1 })"></h3>
+            <button class="pin-toggle" :class="{ on: isFixed(selected) }" @click="toggleFixed()" :title="t('key.pinLong')">
+              📌 <span x-text="t(isFixed(selected) ? 'key.pinned' : 'key.pin')"></span>
             </button>
-            <button class="ghost danger" @click="clearSelected()">Taste leeren</button>
+            <button class="ghost danger" @click="clearSelected()" x-text="t('key.clear')"></button>
           </div>
 
           <div class="row">
             <label class="field grow">
-              <span>Titel</span>
-              <input type="text" x-model="cur.label" @input="markDirty()" placeholder="Wird angezeigt, wenn kein Bild gesetzt ist" />
+              <span x-text="t('key.label')"></span>
+              <input type="text" x-model="cur.label" @input="markDirty()" :placeholder="t('key.labelHint')" />
             </label>
             <label class="field">
-              <span>Aktion</span>
-              <select x-model="cur.action.type" @change="actionTypeChanged()">
-                <template x-for="(label, type) in ACTION_LABELS" :key="type">
-                  <option :value="type" x-text="label"></option>
-                </template>
+              <span x-text="t('key.action')"></span>
+              <select x-model="cur.action.type" @change="actionTypeChanged(cur.action)">
+                <template x-for="type in actionTypes()" :key="type"><option :value="type" x-text="t('action.' + type)" :selected="type === cur.action.type"></option></template>
               </select>
             </label>
           </div>
-
-          <template x-if="cur.action.type === 'shell'">
-            <label class="field">
-              <span>Befehl</span>
-              <input type="text" class="mono" x-model="cur.action.cmd" @input="markDirty()" :placeholder="shellPlaceholder" />
-            </label>
-          </template>
-          <template x-if="cur.action.type === 'shortcut'">
-            <label class="field">
-              <span>Tastenkürzel</span>
-              <div class="shortcut">
-                <input type="text" class="mono" x-model="cur.action.keys" @input="markDirty()" placeholder="z.B. ctrl+alt+t oder super+Return" />
-                <button :class="{ recording }" @click="recordShortcut()" x-text="recording ? 'Drücke Tasten …' : 'Aufnehmen'"></button>
-              </div>
-            </label>
-          </template>
-          <template x-if="cur.action.type === 'url'">
-            <label class="field">
-              <span>Adresse</span>
-              <input type="url" x-model="cur.action.url" @input="markDirty()" placeholder="https://…" />
-            </label>
-          </template>
-          <template x-if="cur.action.type === 'switch_page'">
-            <label class="field">
-              <span>Ziel</span>
-              <select x-model="cur.action.page" @change="markDirty()">
-                <option value="@next">→ Nächste Seite</option>
-                <option value="@prev">← Vorherige Seite</option>
-                <template x-for="name in pageNames()" :key="name">
-                  <option :value="name" x-text="'Seite: ' + name"></option>
-                </template>
-              </select>
-            </label>
-          </template>
-          <template x-if="cur.action.type === 'predefined_command'">
-            <label class="field">
-              <span>Funktion</span>
-              <select x-model="cur.action.command_id" @change="markDirty()">
-                <template x-for="g in predefinedGroups()" :key="g.name">
-                  <optgroup :label="g.name">
-                    <template x-for="p in g.items" :key="p.id">
-                      <option :value="p.id" x-text="p.label" :selected="p.id === cur.action.command_id"></option>
-                    </template>
-                  </optgroup>
-                </template>
-              </select>
-            </label>
+          <template x-for="a in [cur.action]" :key="'main-' + selected">
+            <div class="action-fields" x-html="actionFields"></div>
           </template>
 
-          <template x-if="cur.action.type === 'timer'">
-            <div class="row">
-              <label class="field"><span>Timer</span>
-                <select x-model="cur.action.op" @change="markDirty()">
-                  <template x-for="o in TIMER_OPS" :key="o.id"><option :value="o.id" x-text="o.label" :selected="o.id === cur.action.op"></option></template>
-                </select></label>
-              <label class="field"><span>Dauer (min)</span>
-                <input type="number" min="0" max="1440" x-model.number="cur.action.minutes" @input="markDirty()" /></label>
-            </div>
-          </template>
           <div class="behavior">
             <label class="field">
-              <span>Beim Halten</span>
+              <span x-text="t('press.title')"></span>
               <select x-model="cur.press" @change="markDirty()">
-                <template x-for="m in PRESS_MODES" :key="m.id">
-                  <option :value="m.id" x-text="m.label" :disabled="!pressModeAllowed(m.id)" :selected="m.id === cur.press"></option>
+                <template x-for="m in PRESS_MODES" :key="m">
+                  <option :value="m" x-text="t('press.' + m)" :disabled="!pressModeAllowed(m)" :selected="m === cur.press"></option>
                 </template>
               </select>
             </label>
-            <p class="hint" x-show="cur.press === 'hold'">Die Tastenkombination bleibt gedrückt, bis du die Taste am Deck loslässt.</p>
-            <p class="hint" x-show="cur.press === 'repeat'">Löst sofort aus und wiederholt nach kurzer Verzögerung, solange die Taste gedrückt ist.</p>
-
+            <p class="hint" x-show="cur.press === 'hold'" x-text="t('press.holdHint')"></p>
+            <p class="hint" x-show="cur.press === 'repeat'" x-text="t('press.repeatHint')"></p>
             <template x-if="cur.press === 'tap'">
-              <div class="long-press">
+              <div class="sub-action">
                 <label class="field">
-                  <span>Langer Druck (ab 0,5 s)</span>
-                  <select x-model="cur.long_press.type" @change="longPressTypeChanged()">
-                    <template x-for="(label, type) in ACTION_LABELS" :key="type">
-                      <option :value="type" x-text="label" :selected="type === cur.long_press.type"></option>
-                    </template>
+                  <span x-text="t('press.long')"></span>
+                  <select x-model="cur.long_press.type" @change="actionTypeChanged(cur.long_press)">
+                    <template x-for="type in actionTypes()" :key="type"><option :value="type" x-text="t('action.' + type)" :selected="type === cur.long_press.type"></option></template>
                   </select>
                 </label>
-                <template x-if="cur.long_press.type === 'shell'">
-                  <label class="field grow"><span>Befehl</span>
-                    <input type="text" class="mono" x-model="cur.long_press.cmd" @input="markDirty()" /></label>
-                </template>
-                <template x-if="cur.long_press.type === 'shortcut'">
-                  <label class="field grow"><span>Tastenkürzel</span>
-                    <input type="text" class="mono" x-model="cur.long_press.keys" @input="markDirty()" placeholder="z.B. ctrl+alt+t" /></label>
-                </template>
-                <template x-if="cur.long_press.type === 'url'">
-                  <label class="field grow"><span>Adresse</span>
-                    <input type="url" x-model="cur.long_press.url" @input="markDirty()" /></label>
-                </template>
-                <template x-if="cur.long_press.type === 'switch_page'">
-                  <label class="field"><span>Ziel</span>
-                    <select x-model="cur.long_press.page" @change="markDirty()">
-                      <option value="@next">→ Nächste Seite</option>
-                      <option value="@prev">← Vorherige Seite</option>
-                      <template x-for="name in pageNames()" :key="name"><option :value="name" x-text="'Seite: ' + name"></option></template>
-                    </select></label>
-                </template>
-                <template x-if="cur.long_press.type === 'timer'">
-                  <label class="field"><span>Timer</span>
-                    <select x-model="cur.long_press.op" @change="markDirty()">
-                      <template x-for="o in TIMER_OPS" :key="o.id"><option :value="o.id" x-text="o.label" :selected="o.id === cur.long_press.op"></option></template>
-                    </select></label>
-                </template>
-                <template x-if="cur.long_press.type === 'predefined_command'">
-                  <label class="field"><span>Funktion</span>
-                    <select x-model="cur.long_press.command_id" @change="markDirty()">
-                      <template x-for="g in predefinedGroups()" :key="g.name">
-                        <optgroup :label="g.name">
-                          <template x-for="p in g.items" :key="p.id">
-                            <option :value="p.id" x-text="p.label" :selected="p.id === cur.long_press.command_id"></option>
-                          </template>
-                        </optgroup>
-                      </template>
-                    </select></label>
+                <template x-for="a in [cur.long_press]" :key="'long-' + selected">
+                  <div class="action-fields" x-html="actionFields"></div>
                 </template>
               </div>
             </template>
-            <p class="hint" x-show="cur.press === 'tap' && cur.long_press.type !== 'none'">Kurz drücken löst die Aktion oben aus, beim Loslassen. Ab 0,5 s Halten nur die Aktion für den langen Druck.</p>
+            <p class="hint" x-show="cur.press === 'tap' && cur.long_press.type !== 'none'" x-text="t('press.longHint')"></p>
+          </div>
+
+          <div class="behavior">
+            <label class="check">
+              <input type="checkbox" :checked="!!cur.toggle" @change="setToggle($event.target.checked)" />
+              <span x-text="t('toggle.enable')"></span>
+            </label>
+            <template x-if="cur.toggle">
+              <div class="toggle-state">
+                <p class="hint" x-text="t('toggle.hint')"></p>
+                <div class="row">
+                  <div class="key small" :class="{ empty: !cur.toggle.preview_url && !cur.toggle.label }">
+                    <div class="key-face" :style="faceStyle({ ...cur, ...cur.toggle })">
+                      <template x-if="cur.toggle.preview_url"><img :src="cur.toggle.preview_url" alt="" /></template>
+                      <template x-if="!cur.toggle.preview_url && cur.toggle.label">
+                        <span class="key-label" :style="labelStyle(cur)" x-text="cur.toggle.label"></span>
+                      </template>
+                    </div>
+                  </div>
+                  <label class="field grow"><span x-text="t('toggle.label')"></span>
+                    <input type="text" x-model="cur.toggle.label" @input="markDirty()" /></label>
+                  <button @click="pickImage('toggle')" x-text="t('key.image')"></button>
+                  <button @click="openCatalog('toggle')" x-text="t('key.catalog')"></button>
+                  <button class="ghost" x-show="cur.toggle.icon_path" @click="cur.toggle.icon_path = ''; cur.toggle.preview_url = ''; markDirty()" x-text="t('key.removeImage')"></button>
+                </div>
+                <label class="field">
+                  <span x-text="t('toggle.action')"></span>
+                  <select x-model="cur.toggle.action.type" @change="actionTypeChanged(cur.toggle.action)">
+                    <template x-for="type in actionTypes()" :key="type"><option :value="type" x-text="t('action.' + type)" :selected="type === cur.toggle.action.type"></option></template>
+                  </select>
+                </label>
+                <template x-for="a in [cur.toggle.action]" :key="'toggle-' + selected">
+                  <div class="action-fields" x-html="actionFields"></div>
+                </template>
+              </div>
+            </template>
           </div>
 
           <div class="behavior">
             <label class="field">
-              <span>Live-Anzeige (ersetzt Bild und Titel)</span>
+              <span x-text="t('live.title')"></span>
               <select :value="cur.live.type" @change="setLive($event.target.value)">
-                <option value="none">Keine</option>
-                <template x-for="t in widgetTypes(true)" :key="t.id"><option :value="t.id" x-text="t.label" :selected="t.id === cur.live.type"></option></template>
+                <option value="none" x-text="t('common.none')"></option>
+                <template x-for="type in widgetTypes(true)" :key="type"><option :value="type" x-text="t('widget.' + type)" :selected="type === cur.live.type"></option></template>
               </select>
             </label>
             <template x-for="w in (cur.live.type !== 'none' ? [cur.live] : [])" :key="'live-' + selected">
@@ -362,22 +301,22 @@
           </div>
 
           <details class="text-style" :open="!cur.preview_url">
-            <summary>Textdarstellung (ohne Bild)</summary>
+            <summary x-text="t('style.title')"></summary>
             <div class="row">
-              <label class="field color"><span>Hintergrund</span>
+              <label class="field color"><span x-text="t('style.background')"></span>
                 <input type="color" x-model="cur.text_style.background_color" @input="markDirty()" /></label>
-              <label class="field color"><span>Schrift</span>
+              <label class="field color"><span x-text="t('style.text')"></span>
                 <input type="color" x-model="cur.text_style.text_color" @input="markDirty()" /></label>
-              <label class="field"><span>Schriftart</span>
+              <label class="field"><span x-text="t('style.font')"></span>
                 <select x-model="cur.text_style.font_family" @change="markDirty()">
                   <template x-for="f in FONTS" :key="f"><option :value="f" x-text="f"></option></template>
                 </select></label>
-              <label class="field"><span>Größe <b x-text="cur.text_style.font_size"></b></span>
+              <label class="field"><span><span x-text="t('style.size')"></span> <b x-text="cur.text_style.font_size"></b></span>
                 <input type="range" min="12" max="96" x-model.number="cur.text_style.font_size" @input="markDirty()" /></label>
               <div class="toggles">
-                <button :class="{ on: cur.text_style.bold }" @click="cur.text_style.bold = !cur.text_style.bold; markDirty()"><b>F</b></button>
-                <button :class="{ on: cur.text_style.italic }" @click="cur.text_style.italic = !cur.text_style.italic; markDirty()"><i>K</i></button>
-                <button :class="{ on: cur.text_style.underline }" @click="cur.text_style.underline = !cur.text_style.underline; markDirty()"><u>U</u></button>
+                <button :class="{ on: cur.text_style.bold }" @click="cur.text_style.bold = !cur.text_style.bold; markDirty()" :title="t('style.bold')"><b x-text="t('style.boldShort')"></b></button>
+                <button :class="{ on: cur.text_style.italic }" @click="cur.text_style.italic = !cur.text_style.italic; markDirty()" :title="t('style.italic')"><i x-text="t('style.italicShort')"></i></button>
+                <button :class="{ on: cur.text_style.underline }" @click="cur.text_style.underline = !cur.text_style.underline; markDirty()" :title="t('style.underline')"><u>U</u></button>
               </div>
             </div>
           </details>
@@ -389,66 +328,62 @@
       <div class="props info-props">
         <div class="props-main">
           <div class="props-head">
-            <h3>Infofenster</h3>
-            <label class="check"><input type="checkbox" x-model="editor.small_window.enabled" @change="markDirty()" /> Aktiv</label>
-            <button class="pin-toggle" :class="{ on: isFixed(INFO_INDEX) }" @click="toggleFixed()"
-                    title="Angepinnt gilt die Aktion beim Antippen auf allen Seiten">
-              📌 <span x-text="isFixed(INFO_INDEX) ? 'Aktion angepinnt (alle Seiten)' : 'Aktion anpinnen'"></span>
+            <h3 x-text="t('info.title')"></h3>
+            <label class="check"><input type="checkbox" x-model="editor.small_window.enabled" @change="markDirty()" /> <span x-text="t('info.active')"></span></label>
+            <button class="pin-toggle" :class="{ on: isFixed(INFO_INDEX) }" @click="toggleFixed()" :title="t('info.pinHint')">
+              📌 <span x-text="t(isFixed(INFO_INDEX) ? 'info.pinned' : 'info.pin')"></span>
             </button>
           </div>
           <div class="row">
             <label class="field" x-show="!editor.small_window.widgets.length">
-              <span>Anzeige</span>
+              <span x-text="t('info.mode')"></span>
               <select :value="infoMode()" @change="setInfoMode($event.target.value)" :disabled="!editor.small_window.enabled">
-                <option value="clock">Uhr</option>
-                <option value="stats">CPU / RAM</option>
-                <option value="rotate">Uhr und Statistik im Wechsel</option>
+                <option value="clock" x-text="t('info.modeClock')"></option>
+                <option value="stats" x-text="t('info.modeStats')"></option>
+                <option value="rotate" x-text="t('info.modeRotate')"></option>
               </select>
             </label>
-            <label class="field" x-show="!editor.small_window.widgets.length && infoMode() === 'rotate'">
-              <span>Wechsel alle (s)</span>
+            <label class="field" x-show="editor.small_window.widgets.length > 1 || infoMode() === 'rotate'">
+              <span x-text="t('info.rotate')"></span>
               <input type="number" min="1" step="1" x-model.number="editor.small_window.rotate_every_s" @input="markDirty()" />
             </label>
             <label class="field" x-show="!editor.small_window.widgets.length">
-              <span>Zeitformat</span>
+              <span x-text="t('info.timeFormat')"></span>
               <input type="text" class="mono" x-model="editor.small_window.time_format" @input="markDirty()" placeholder="%H:%M" />
             </label>
             <label class="field color">
-              <span>Hintergrund</span>
+              <span x-text="t('style.background')"></span>
               <input type="color" x-model="editor.small_window.background_color" @input="markDirty()" />
             </label>
             <label class="field">
-              <span>Aktion beim Antippen</span>
-              <select x-model="cur.action.type" @change="actionTypeChanged()">
-                <template x-for="(label, type) in ACTION_LABELS" :key="type">
-                  <option :value="type" x-text="label"></option>
-                </template>
+              <span x-text="t('info.tapAction')"></span>
+              <select x-model="cur.action.type" @change="actionTypeChanged(cur.action)">
+                <template x-for="type in actionTypes()" :key="type"><option :value="type" x-text="t('action.' + type)" :selected="type === cur.action.type"></option></template>
               </select>
             </label>
           </div>
+          <template x-for="a in [cur.action]" :key="'info-action'">
+            <div class="action-fields" x-html="actionFields"></div>
+          </template>
 
           <div class="widgets">
             <div class="widgets-head">
-              <span>Widgets</span>
+              <span x-text="t('info.widgets')"></span>
               <select @change="addWidget($event.target.value); $event.target.value = ''">
-                <option value="">+ Widget hinzufügen …</option>
-                <template x-for="t in widgetTypes(false)" :key="t.id"><option :value="t.id" x-text="t.label"></option></template>
+                <option value="" x-text="t('info.addWidget')"></option>
+                <template x-for="type in widgetTypes(false)" :key="type"><option :value="type" x-text="t('widget.' + type)"></option></template>
               </select>
-              <label class="field inline" x-show="editor.small_window.widgets.length > 1">
-                <span>Wechsel alle (s)</span>
-                <input type="number" min="1" step="1" x-model.number="editor.small_window.rotate_every_s" @input="markDirty()" />
-              </label>
             </div>
-            <p class="hint" x-show="!editor.small_window.widgets.length">Ohne Widgets zeigt die Firmware Uhr oder CPU/RAM (Einstellungen unten). Mit Widgets rendert die App das Infofenster selbst – z.B. Befehlsausgaben, Verlaufsgrafiken, Bilder, Timer oder den laufenden Titel.</p>
+            <p class="hint" x-show="!editor.small_window.widgets.length" x-text="t('info.widgetsHint')"></p>
             <template x-for="(w, i) in editor.small_window.widgets" :key="i">
               <div class="widget-card">
                 <img class="widget-thumb" :src="previews['widget-' + i]" x-show="previews['widget-' + i]" alt="" />
                 <div class="widget-body">
                   <div class="widget-title">
-                    <b x-text="(i + 1) + '. ' + (WIDGET_TYPES.find((t) => t.id === w.type)?.label || w.type)"></b>
-                    <button class="icon-btn" @click="moveWidget(i, -1)" :disabled="i === 0" title="Nach vorne">↑</button>
-                    <button class="icon-btn" @click="moveWidget(i, 1)" :disabled="i === editor.small_window.widgets.length - 1" title="Nach hinten">↓</button>
-                    <button class="icon-btn danger" @click="removeWidget(i)" title="Entfernen">✕</button>
+                    <b x-text="(i + 1) + '. ' + t('widget.' + w.type)"></b>
+                    <button class="icon-btn" @click="moveWidget(i, -1)" :disabled="i === 0" :title="t('common.up')">↑</button>
+                    <button class="icon-btn" @click="moveWidget(i, 1)" :disabled="i === editor.small_window.widgets.length - 1" :title="t('common.down')">↓</button>
+                    <button class="icon-btn danger" @click="removeWidget(i)" :title="t('common.remove')">✕</button>
                   </div>
                   <div class="widget-fields" x-html="widgetFields"></div>
                 </div>
@@ -457,18 +392,17 @@
           </div>
 
           <div class="field" x-show="!editor.small_window.widgets.length">
-            <span>Eigene Messwerte statt Firmware-Anzeige (bis zu 3)</span>
+            <span x-text="t('info.metrics')"></span>
             <div class="chips">
-              <template x-for="m in METRICS" :key="m.id">
-                <button class="chip" :class="{ on: editor.small_window.metrics_items.includes(m.id) }"
-                        :disabled="!editor.small_window.metrics_items.includes(m.id) && editor.small_window.metrics_items.length >= 3"
-                        @click="toggleMetric(m.id)" x-text="m.label"></button>
+              <template x-for="m in METRICS" :key="m">
+                <button class="chip" :class="{ on: editor.small_window.metrics_items.includes(m) }"
+                        :disabled="!editor.small_window.metrics_items.includes(m) && editor.small_window.metrics_items.length >= 3"
+                        @click="toggleMetric(m)" x-text="t('metric.' + m)"></button>
               </template>
             </div>
           </div>
-
           <div class="field" x-show="!editor.small_window.widgets.length && editor.small_window.metrics_items.includes('temperature') && sensors.length">
-            <span>Temperatursensoren (bis zu 3, in dieser Reihenfolge)</span>
+            <span x-text="t('info.sensors')"></span>
             <div class="chips">
               <template x-for="s in sensors" :key="s.id">
                 <button class="chip" :class="{ on: editor.small_window.temperature_sensors.includes(s.id) }"
@@ -478,49 +412,6 @@
               </template>
             </div>
           </div>
-
-          <template x-if="cur.action.type === 'shell'">
-            <label class="field"><span>Befehl</span>
-              <input type="text" class="mono" x-model="cur.action.cmd" @input="markDirty()" /></label>
-          </template>
-          <template x-if="cur.action.type === 'url'">
-            <label class="field"><span>Adresse</span>
-              <input type="url" x-model="cur.action.url" @input="markDirty()" /></label>
-          </template>
-          <template x-if="cur.action.type === 'shortcut'">
-            <label class="field"><span>Tastenkürzel</span>
-              <input type="text" class="mono" x-model="cur.action.keys" @input="markDirty()" /></label>
-          </template>
-          <template x-if="cur.action.type === 'predefined_command'">
-            <label class="field"><span>Funktion</span>
-              <select x-model="cur.action.command_id" @change="markDirty()">
-                <template x-for="g in predefinedGroups()" :key="g.name">
-                  <optgroup :label="g.name">
-                    <template x-for="p in g.items" :key="p.id">
-                      <option :value="p.id" x-text="p.label" :selected="p.id === cur.action.command_id"></option>
-                    </template>
-                  </optgroup>
-                </template>
-              </select></label>
-          </template>
-          <template x-if="cur.action.type === 'timer'">
-            <div class="row">
-              <label class="field"><span>Timer</span>
-                <select x-model="cur.action.op" @change="markDirty()">
-                  <template x-for="o in TIMER_OPS" :key="o.id"><option :value="o.id" x-text="o.label" :selected="o.id === cur.action.op"></option></template>
-                </select></label>
-              <label class="field"><span>Dauer (min)</span>
-                <input type="number" min="0" max="1440" x-model.number="cur.action.minutes" @input="markDirty()" /></label>
-            </div>
-          </template>
-          <template x-if="cur.action.type === 'switch_page'">
-            <label class="field"><span>Ziel</span>
-              <select x-model="cur.action.page" @change="markDirty()">
-                <option value="@next">→ Nächste Seite</option>
-                <option value="@prev">← Vorherige Seite</option>
-                <template x-for="name in pageNames()" :key="name"><option :value="name" x-text="'Seite: ' + name"></option></template>
-              </select></label>
-          </template>
         </div>
       </div>
     </template>
@@ -528,20 +419,132 @@
 </main>
 </template>
 
-<!-- ───────────── Icon-Katalog ───────────── -->
+<!-- ───────────── Page settings ───────────── -->
+<div class="modal" x-show="pageDialog.open" x-cloak x-transition.opacity @keydown.escape.window="pageDialog.open = false">
+  <div class="modal-box small" @click.outside="pageDialog.open = false">
+    <header><h3 x-text="t('pageSettings.title')"></h3><button class="icon-btn" @click="pageDialog.open = false">✕</button></header>
+    <div class="modal-body" x-show="pageDialog.open">
+      <label class="field"><span x-text="t('pageSettings.name')"></span>
+        <input type="text" x-model="pageDialog.name" /></label>
+      <label class="check"><input type="checkbox" x-model="pageDialog.folder" /> <span x-text="t('pageSettings.folder')"></span></label>
+      <p class="hint" x-text="t('pageSettings.folderHint')"></p>
+      <label class="field" x-show="pageDialog.folder"><span x-text="t('pageSettings.backIndex')"></span>
+        <select x-model.number="pageDialog.back_index">
+          <template x-for="i in 13" :key="i"><option :value="i - 1" x-text="t('key.title', { n: i })" :selected="i - 1 === pageDialog.back_index"></option></template>
+        </select></label>
+      <label class="field"><span x-text="t('pageSettings.apps')"></span>
+        <textarea class="mono" rows="3" x-model="pageDialog.apps" :placeholder="t('pageSettings.appsPlaceholder')"></textarea></label>
+      <p class="hint" x-text="t('pageSettings.appsHint')"></p>
+      <div class="chips" x-show="recentApps.length">
+        <span class="hint" x-text="t('pageSettings.recentApps')"></span>
+        <template x-for="app in recentApps" :key="app"><button class="chip" @click="addAppToDialog(app)" x-text="app"></button></template>
+      </div>
+    </div>
+    <footer class="modal-actions">
+      <button class="ghost" @click="pageDialog.open = false" x-text="t('common.cancel')"></button>
+      <button class="primary" @click="applyPageSettings()" x-text="t('common.apply')"></button>
+    </footer>
+  </div>
+</div>
+
+<!-- ───────────── Settings ───────────── -->
+<div class="modal" x-show="settings.open" x-cloak x-transition.opacity @keydown.escape.window="settings.open = false">
+  <div class="modal-box" @click.outside="settings.open = false">
+    <header>
+      <h3 x-text="t('settings.title')"></h3>
+      <nav class="tabs">
+        <button :class="{ active: settings.tab === 'general' }" @click="settings.tab = 'general'" x-text="t('settings.general')"></button>
+        <button :class="{ active: settings.tab === 'display' }" @click="settings.tab = 'display'" x-text="t('settings.display')"></button>
+        <button :class="{ active: settings.tab === 'integrations' }" @click="settings.tab = 'integrations'; loadSecrets()" x-text="t('settings.integrations')"></button>
+      </nav>
+      <button class="icon-btn" @click="settings.open = false">✕</button>
+    </header>
+    <template x-if="editor">
+    <div class="modal-body">
+      <template x-if="settings.tab === 'general'">
+        <div class="settings-section">
+          <label class="field"><span x-text="t('settings.uiLanguage')"></span>
+            <select :value="lang" @change="setLang($event.target.value)">
+              <option value="de">Deutsch</option><option value="en">English</option>
+            </select></label>
+          <label class="field"><span x-text="t('settings.deckLanguage')"></span>
+            <select x-model="editor.language" @change="markDirty()">
+              <option value="" x-text="t('settings.deckLanguageAuto')"></option>
+              <option value="de">Deutsch</option><option value="en">English</option>
+            </select></label>
+          <label class="check"><input type="checkbox" x-model="saveBundle" /> <span x-text="t('settings.saveBundle')"></span></label>
+          <div class="file-info"><span x-text="t('inspector.config')"></span><code x-text="editor.path"></code></div>
+        </div>
+      </template>
+      <template x-if="settings.tab === 'display'">
+        <div class="settings-section">
+          <label class="field"><span><span x-text="t('top.brightness')"></span> <b x-text="editor.brightness + '%'"></b></span>
+            <input type="range" min="0" max="100" step="5" x-model.number="editor.brightness" @input="markDirty()" /></label>
+          <div class="row">
+            <label class="field"><span x-text="t('display.dimAfter')"></span>
+              <input type="number" min="0" step="30" x-model.number="editor.display.dim_after_s" @input="markDirty()" /></label>
+            <label class="field"><span x-text="t('display.dimBrightness')"></span>
+              <input type="number" min="0" max="100" x-model.number="editor.display.dim_brightness" @input="markDirty()" /></label>
+          </div>
+          <p class="hint" x-text="t('display.dimHint')"></p>
+          <label class="check"><input type="checkbox" x-model="editor.display.off_when_locked" @change="markDirty()" /> <span x-text="t('display.offWhenLocked')"></span></label>
+          <label class="check"><input type="checkbox" x-model="editor.display.night_enabled" @change="markDirty()" /> <span x-text="t('display.night')"></span></label>
+          <div class="row" x-show="editor.display.night_enabled">
+            <label class="field"><span x-text="t('display.from')"></span><input type="time" x-model="editor.display.night_from" @input="markDirty()" /></label>
+            <label class="field"><span x-text="t('display.to')"></span><input type="time" x-model="editor.display.night_to" @input="markDirty()" /></label>
+            <label class="field"><span x-text="t('display.nightBrightness')"></span>
+              <input type="number" min="0" max="100" x-model.number="editor.display.night_brightness" @input="markDirty()" /></label>
+          </div>
+          <p class="hint" x-text="t('display.saveHint')"></p>
+        </div>
+      </template>
+      <template x-if="settings.tab === 'integrations'">
+        <div class="settings-section">
+          <h4>Home Assistant</h4>
+          <div class="row">
+            <label class="field grow"><span>URL</span>
+              <input type="url" x-model="secrets.home_assistant_url" placeholder="http://homeassistant.local:8123" /></label>
+            <label class="field grow"><span x-text="t('integrations.token')"></span>
+              <input type="password" x-model="secrets.home_assistant_token" :placeholder="secrets.home_assistant_token_set ? t('integrations.stored') : t('integrations.tokenHint')" autocomplete="off" /></label>
+          </div>
+          <p class="hint" x-text="t('integrations.haHint')"></p>
+          <h4>OBS</h4>
+          <div class="row">
+            <label class="field grow"><span>URL</span>
+              <input type="text" x-model="secrets.obs_url" placeholder="ws://localhost:4455" /></label>
+            <label class="field grow"><span x-text="t('integrations.password')"></span>
+              <input type="password" x-model="secrets.obs_password" :placeholder="secrets.obs_password_set ? t('integrations.stored') : ''" autocomplete="off" /></label>
+          </div>
+          <p class="hint" x-text="t('integrations.obsHint')"></p>
+          <template x-for="(result, name) in secretsTest" :key="name">
+            <p class="test-result" :class="result === 'ok' ? 'ok' : 'err'" x-text="(name === 'obs' ? 'OBS' : 'Home Assistant') + ': ' + (result === 'ok' ? t('integrations.ok') : result)"></p>
+          </template>
+          <div class="row">
+            <button @click="testSecrets()" x-text="t('integrations.test')"></button>
+            <button class="primary" @click="saveSecrets()" x-text="t('integrations.save')"></button>
+          </div>
+          <p class="hint" x-text="t('integrations.storageHint')"></p>
+        </div>
+      </template>
+    </div>
+    </template>
+  </div>
+</div>
+
+<!-- ───────────── Icon catalog ───────────── -->
 <div class="modal" x-show="catalog.open" x-cloak x-transition.opacity @keydown.escape.window="catalog.open = false">
   <div class="modal-box" @click.outside="catalog.open = false">
     <header>
-      <h3>Icon-Katalog</h3>
-      <input type="search" placeholder="Suchen, z.B. play, terminal, github, herz …" x-model="catalog.query" x-ref="catalogSearch" />
+      <h3 x-text="t('catalog.title')"></h3>
+      <input type="search" :placeholder="t('catalog.search')" x-model="catalog.query" x-ref="catalogSearch" />
       <select x-model="catalog.style">
-        <option value="all">Alle</option>
-        <option value="solid">Gefüllt</option>
-        <option value="regular">Umriss</option>
-        <option value="brands">Marken</option>
-        <option value="emoji">Emojis</option>
+        <option value="all" x-text="t('catalog.all')"></option>
+        <option value="solid" x-text="t('catalog.solid')"></option>
+        <option value="regular" x-text="t('catalog.regular')"></option>
+        <option value="brands" x-text="t('catalog.brands')"></option>
+        <option value="emoji" x-text="t('catalog.emoji')"></option>
       </select>
-      <button class="icon-btn" @click="catalog.open = false" title="Schließen">✕</button>
+      <button class="icon-btn" @click="catalog.open = false" :title="t('common.close')">✕</button>
     </header>
     <div class="catalog-grid">
       <template x-for="icon in catalogResults()" :key="icon.asset_id">
@@ -555,72 +558,212 @@
   </div>
 </div>
 
-<!-- ───────────── Meldungen ───────────── -->
+<input type="file" accept="image/*" x-ref="upload" hidden @change="uploadIcon($event.target.files[0]); $event.target.value = ''" />
+
+<!-- ───────────── Toasts ───────────── -->
 <div class="toasts">
-  <template x-for="t in toasts" :key="t.id">
-    <div class="toast" :class="t.kind" x-text="t.text" x-transition></div>
+  <template x-for="toastItem in toasts" :key="toastItem.id">
+    <div class="toast" :class="toastItem.kind" x-text="toastItem.text" x-transition></div>
   </template>
 </div>
+
+<!-- Fields of one action; rendered via x-html where `a` is in scope. -->
+<template id="tpl-action-fields">
+  <template x-if="a.type === 'shell'">
+    <label class="field"><span x-text="t('field.command')"></span>
+      <input type="text" class="mono" x-model="a.cmd" @input="markDirty()" :placeholder="shellPlaceholder" /></label>
+  </template>
+  <template x-if="a.type === 'shortcut'">
+    <label class="field"><span x-text="t('field.shortcut')"></span>
+      <div class="shortcut">
+        <input type="text" class="mono" x-model="a.keys" @input="markDirty()" :placeholder="t('field.shortcutHint')" />
+        <button :class="{ recording: recordingTarget === a }" @click="recordShortcut(a)" x-text="t(recordingTarget === a ? 'field.recording' : 'field.record')"></button>
+      </div></label>
+  </template>
+  <template x-if="a.type === 'type_text'">
+    <label class="field"><span x-text="t('field.text')"></span>
+      <textarea rows="2" x-model="a.text" @input="markDirty()" :placeholder="t('field.textHint')"></textarea></label>
+  </template>
+  <template x-if="a.type === 'url'">
+    <label class="field"><span x-text="t('field.address')"></span>
+      <input type="url" x-model="a.url" @input="markDirty()" placeholder="https://…" /></label>
+  </template>
+  <template x-if="a.type === 'http'">
+    <div class="field-group">
+      <div class="row">
+        <label class="field"><span x-text="t('field.method')"></span>
+          <select x-model="a.method" @change="markDirty()">
+            <template x-for="m in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="m"><option :value="m" x-text="m" :selected="m === a.method"></option></template>
+          </select></label>
+        <label class="field grow"><span>URL</span>
+          <input type="url" x-model="a.url" @input="markDirty()" placeholder="https://…/webhook" /></label>
+      </div>
+      <label class="field"><span x-text="t('field.body')"></span>
+        <textarea class="mono" rows="2" x-model="a.body" @input="markDirty()" placeholder='{"key": "value"}'></textarea></label>
+      <label class="field"><span x-text="t('field.headers')"></span>
+        <textarea class="mono" rows="2" :value="headersText(a)" @change="setHeaders(a, $event.target.value)" placeholder="Authorization: Bearer …"></textarea></label>
+    </div>
+  </template>
+  <template x-if="a.type === 'switch_page'">
+    <label class="field"><span x-text="t('field.target')"></span>
+      <select x-model="a.page" @change="markDirty()">
+        <option value="@next" x-text="t('nav.next')" :selected="a.page === '@next'"></option>
+        <option value="@prev" x-text="t('nav.prev')" :selected="a.page === '@prev'"></option>
+        <option value="@back" x-text="t('nav.back')" :selected="a.page === '@back'"></option>
+        <template x-for="name in pageNames()" :key="name"><option :value="name" x-text="t('nav.page', { name })" :selected="name === a.page"></option></template>
+      </select></label>
+  </template>
+  <template x-if="a.type === 'predefined_command'">
+    <label class="field"><span x-text="t('field.function')"></span>
+      <select x-model="a.command_id" @change="markDirty()">
+        <template x-for="g in predefinedGroups()" :key="g.id">
+          <optgroup :label="g.name">
+            <template x-for="p in g.items" :key="p.id"><option :value="p.id" x-text="p.label" :selected="p.id === a.command_id"></option></template>
+          </optgroup>
+        </template>
+      </select></label>
+  </template>
+  <template x-if="a.type === 'timer'">
+    <div class="row">
+      <label class="field"><span x-text="t('action.timer')"></span>
+        <select x-model="a.op" @change="markDirty()">
+          <template x-for="o in TIMER_OPS" :key="o"><option :value="o" x-text="t('timer.' + o)" :selected="o === a.op"></option></template>
+        </select></label>
+      <label class="field"><span x-text="t('field.minutes')"></span>
+        <input type="number" min="0" max="1440" x-model.number="a.minutes" @input="markDirty()" /></label>
+    </div>
+  </template>
+  <template x-if="a.type === 'home_assistant'">
+    <div class="row">
+      <label class="field grow"><span x-text="t('field.service')"></span>
+        <input type="text" class="mono" x-model="a.service" @input="markDirty()" placeholder="light.toggle" list="ha-services" /></label>
+      <label class="field grow"><span>Entity</span>
+        <input type="text" class="mono" x-model="a.entity_id" @input="markDirty()" placeholder="light.kitchen" /></label>
+    </div>
+  </template>
+  <template x-if="a.type === 'obs'">
+    <div class="row">
+      <label class="field"><span>OBS</span>
+        <select x-model="a.op" @change="markDirty()">
+          <template x-for="o in OBS_OPS" :key="o"><option :value="o" x-text="t('obs.' + o)" :selected="o === a.op"></option></template>
+        </select></label>
+      <label class="field grow" x-show="a.op === 'switch_scene' || a.op === 'toggle_mute'">
+        <span x-text="t(a.op === 'switch_scene' ? 'field.scene' : 'field.input')"></span>
+        <input type="text" x-model="a.target" @input="markDirty()" :placeholder="a.op === 'switch_scene' ? 'Kamera' : 'Mic/Aux'" /></label>
+    </div>
+  </template>
+  <template x-if="a.type === 'delay'">
+    <label class="field"><span x-text="t('field.delay')"></span>
+      <input type="number" min="1" max="60000" step="50" x-model.number="a.ms" @input="markDirty()" /></label>
+  </template>
+  <template x-if="a.type === 'multi'">
+    <div class="steps">
+      <template x-for="(step, si) in a.steps" :key="si">
+        <div class="step">
+          <span class="step-no" x-text="si + 1"></span>
+          <div class="step-body">
+            <select x-model="step.type" @change="actionTypeChanged(step)">
+              <template x-for="type in stepTypes()" :key="type"><option :value="type" x-text="t('action.' + type)" :selected="type === step.type"></option></template>
+            </select>
+            <template x-for="a in [step]" :key="'step-' + si">
+              <div class="action-fields" x-html="actionFields"></div>
+            </template>
+          </div>
+          <div class="step-tools">
+            <button class="icon-btn" @click="moveStep(a, si, -1)" :disabled="si === 0">↑</button>
+            <button class="icon-btn" @click="moveStep(a, si, 1)" :disabled="si === a.steps.length - 1">↓</button>
+            <button class="icon-btn danger" @click="removeStep(a, si)">✕</button>
+          </div>
+        </div>
+      </template>
+      <div class="row">
+        <button @click="addStep(a, 'shell')" x-text="t('multi.addAction')"></button>
+        <button @click="addStep(a, 'delay')" x-text="t('multi.addDelay')"></button>
+      </div>
+    </div>
+  </template>
+</template>
 
 <!-- Fields of one widget; rendered via x-html where `w` is in scope. -->
 <template id="tpl-widget-fields">
   <div class="row">
     <template x-if="w.type !== 'media' && w.type !== 'image'">
-      <label class="field"><span>Überschrift</span>
-        <input type="text" x-model="w.title" @input="markDirty()" placeholder="optional" /></label>
+      <label class="field"><span x-text="t('field.heading')"></span>
+        <input type="text" x-model="w.title" @input="markDirty()" :placeholder="t('common.optional')" /></label>
     </template>
     <template x-if="w.type === 'clock'">
-      <label class="field"><span>Format</span>
+      <label class="field"><span x-text="t('field.format')"></span>
         <input type="text" class="mono" x-model="w.format" @input="markDirty()" placeholder="%H:%M" /></label>
     </template>
     <template x-if="w.type === 'graph'">
-      <label class="field"><span>Wert</span>
+      <label class="field"><span x-text="t('field.value')"></span>
         <select x-model="w.metric" @change="markDirty()">
-          <template x-for="m in GRAPH_METRICS" :key="m.id"><option :value="m.id" x-text="m.label" :selected="m.id === w.metric"></option></template>
+          <template x-for="m in GRAPH_METRICS" :key="m"><option :value="m" x-text="t('metric.' + m)" :selected="m === w.metric"></option></template>
         </select></label>
     </template>
-    <template x-if="w.type === 'command' || w.type === 'image'">
-      <label class="field"><span x-text="w.type === 'image' ? 'Bildwechsel alle (s)' : 'Aktualisieren alle (s)'"></span>
+    <template x-if="w.type === 'obs'">
+      <label class="field"><span x-text="t('field.show')"></span>
+        <select x-model="w.show" @change="markDirty()">
+          <template x-for="s in ['scene', 'record', 'stream']" :key="s"><option :value="s" x-text="t('obsShow.' + s)" :selected="s === w.show"></option></template>
+        </select></label>
+    </template>
+    <template x-if="w.type === 'command' || w.type === 'image' || w.type === 'home_assistant'">
+      <label class="field"><span x-text="t(w.type === 'image' ? 'field.slideEvery' : 'field.refreshEvery')"></span>
         <input type="number" min="0.5" step="0.5" x-model.number="w.interval_s" @input="markDirty()" /></label>
     </template>
   </div>
   <template x-if="w.type === 'metrics'">
     <div class="chips">
-      <template x-for="m in METRICS" :key="m.id">
-        <button class="chip" :class="{ on: w.items.includes(m.id) }"
-                :disabled="!w.items.includes(m.id) && w.items.length >= 3"
-                @click="toggleWidgetItem(w, m.id)" x-text="m.label"></button>
+      <template x-for="m in METRICS" :key="m">
+        <button class="chip" :class="{ on: w.items.includes(m) }" :disabled="!w.items.includes(m) && w.items.length >= 3"
+                @click="toggleWidgetItem(w, m)" x-text="t('metric.' + m)"></button>
       </template>
     </div>
   </template>
   <template x-if="w.type === 'command'">
-    <div class="widget-command">
-      <label class="field"><span>Befehl (Ausgabe wird angezeigt, max. 4 Zeilen)</span>
-        <input type="text" class="mono" x-model="w.cmd" @input="markDirty()" placeholder="z.B. curl -s 'wttr.in/Berlin?format=3'" /></label>
-      <div class="row">
-        <label class="check"><input type="checkbox" :checked="!!w.ok_color" @change="w.ok_color = $event.target.checked ? '#14532D' : ''; markDirty()" /> Farbe bei Erfolg (Exit 0)</label>
-        <input type="color" x-show="w.ok_color" x-model="w.ok_color" @input="markDirty()" />
-        <label class="check"><input type="checkbox" :checked="!!w.fail_color" @change="w.fail_color = $event.target.checked ? '#B91C1C' : ''; markDirty()" /> Farbe bei Fehler</label>
-        <input type="color" x-show="w.fail_color" x-model="w.fail_color" @input="markDirty()" />
-      </div>
+    <label class="field"><span x-text="t('field.commandOutput')"></span>
+      <input type="text" class="mono" x-model="w.cmd" @input="markDirty()" placeholder="curl -s 'wttr.in/Berlin?format=3'" /></label>
+  </template>
+  <template x-if="w.type === 'home_assistant'">
+    <div class="row">
+      <label class="field grow"><span>Entity</span>
+        <input type="text" class="mono" x-model="w.entity_id" @input="markDirty()" placeholder="sensor.living_room_temperature" /></label>
+      <label class="field"><span x-text="t('field.attribute')"></span>
+        <input type="text" class="mono" x-model="w.attribute" @input="markDirty()" :placeholder="t('common.optional')" /></label>
+      <label class="field"><span x-text="t('field.activeState')"></span>
+        <input type="text" class="mono" x-model="w.active_state" @input="markDirty()" placeholder="on" /></label>
+    </div>
+  </template>
+  <template x-if="w.type === 'command' || w.type === 'home_assistant'">
+    <div class="row">
+      <label class="check"><input type="checkbox" :checked="!!w.ok_color" @change="w.ok_color = $event.target.checked ? '#14532D' : ''; markDirty()" />
+        <span x-text="t(w.type === 'command' ? 'field.okColor' : 'field.activeColor')"></span></label>
+      <input type="color" x-show="w.ok_color" x-model="w.ok_color" @input="markDirty()" />
+      <label class="check"><input type="checkbox" :checked="!!w.fail_color" @change="w.fail_color = $event.target.checked ? '#B91C1C' : ''; markDirty()" />
+        <span x-text="t(w.type === 'command' ? 'field.failColor' : 'field.inactiveColor')"></span></label>
+      <input type="color" x-show="w.fail_color" x-model="w.fail_color" @input="markDirty()" />
     </div>
   </template>
   <template x-if="w.type === 'image'">
-    <div class="widget-command">
-      <label class="field"><span>Bilder (ein Pfad pro Zeile)</span>
+    <div class="field-group">
+      <label class="field"><span x-text="t('field.images')"></span>
         <textarea class="mono" rows="3" :value="w.paths.join('\n')" @change="setWidgetPaths(w, $event.target.value)"></textarea></label>
-      <label class="upload-btn">Bild hinzufügen …
+      <label class="upload-btn"><span x-text="t('field.addImage')"></span>
         <input type="file" accept="image/*" hidden @change="uploadWidgetImage(w, $event.target.files[0]); $event.target.value = ''" /></label>
     </div>
   </template>
-  <template x-if="w.type === 'timer'">
-    <p class="hint">Zeigt den Countdown. Steuern lässt er sich über die Aktion „Timer“ auf einer Taste.</p>
-  </template>
-  <template x-if="w.type === 'media'">
-    <p class="hint">Zeigt Titel, Interpret und Cover des laufenden Players (Linux: MPRIS, z.B. Spotify, Firefox, VLC; macOS: Spotify oder Musik).</p>
-  </template>
+  <template x-if="w.type === 'timer'"><p class="hint" x-text="t('widgetHint.timer')"></p></template>
+  <template x-if="w.type === 'media'"><p class="hint" x-text="t('widgetHint.media')"></p></template>
+  <template x-if="w.type === 'obs'"><p class="hint" x-text="t('widgetHint.obs')"></p></template>
 </template>
 
+<datalist id="ha-services">
+  <option value="light.toggle"></option><option value="light.turn_on"></option><option value="light.turn_off"></option>
+  <option value="switch.toggle"></option><option value="scene.turn_on"></option><option value="script.turn_on"></option>
+  <option value="cover.toggle"></option><option value="media_player.media_play_pause"></option><option value="climate.set_preset_mode"></option>
+</datalist>
+
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/alpine.min.js" defer></script>
 </body>

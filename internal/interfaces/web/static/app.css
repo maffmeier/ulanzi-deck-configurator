@@ -378,3 +378,47 @@ textarea { background: #15171b; border: 1px solid var(--line); border-radius: 7p
 .upload-btn { align-self: flex-start; padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); cursor: pointer; font-size: 13px; }
 .widget-img { width: 100%; height: 100%; display: block; }
 .key-face.live { padding: 0; }
+
+/* ───────────── Pages, settings, steps ───────────── */
+.page-tab.folder { font-style: italic; }
+.app-dot { color: var(--ok); font-size: 10px; }
+.icon-btn.lang { font-size: 12px; font-weight: 700; letter-spacing: .05em; }
+.stage-tools { display: flex; gap: 12px; color: var(--muted); font-size: 13px; }
+
+.action-fields { display: flex; flex-direction: column; gap: 10px; }
+.action-fields:empty { display: none; }
+.field-group { display: flex; flex-direction: column; gap: 10px; }
+.sub-action { display: flex; flex-direction: column; gap: 10px; }
+.toggle-state { display: flex; flex-direction: column; gap: 10px; }
+.toggle-state .row { align-items: center; }
+.key.small { --key: 56px; width: 56px; height: 56px; cursor: default; flex-shrink: 0; }
+.key.small:hover { transform: none; }
+
+.steps { display: flex; flex-direction: column; gap: 8px; }
+.step {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 10px; border-radius: 8px; background: var(--panel-2);
+}
+.step-no {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-top: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: #343842; color: var(--muted); font-size: 12px; font-weight: 600;
+}
+.step-body { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step-body > select { align-self: flex-start; }
+.step-tools { display: flex; gap: 2px; }
+
+.modal-box.small { width: min(560px, 92vw); height: auto; max-height: 86vh; }
+.modal-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.tabs { display: flex; gap: 4px; flex: 1; }
+.tabs button { background: transparent; border-color: transparent; color: var(--muted); }
+.tabs button.active { background: var(--panel-2); border-color: var(--line); color: var(--text); }
+.settings-section { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.settings-section h4 { margin: 8px 0 0; font-size: 14px; }
+.test-result { margin: 0; font-size: 13px; }
+.test-result.ok { color: var(--ok); }
+.test-result.err { color: var(--err); }
+input[type=time], input[type=password] {
+  background: #15171b; border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; color: inherit; font: inherit;
+}

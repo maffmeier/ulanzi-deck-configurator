@@ -173,10 +173,10 @@ type Page struct {
 }
 
 // backButton is the automatic key that leaves a folder.
-func backButton(index int) Button {
+func backButton(index int, lang string) Button {
 	return Button{
 		Index:     index,
-		Label:     "← Zurück",
+		Label:     DeckText(lang, "back"),
 		Action:    &Action{Type: ActionSwitchPage, Page: PageBack},
 		TextStyle: DefaultTextStyle(),
 		Press:     PressTap,
@@ -294,6 +294,9 @@ type Config struct {
 	SmallWindow  SmallWindow
 	Brightness   int
 	Display      Display
+	// Language of texts shown on the deck ("de", "en" or empty for the
+	// system language).
+	Language string
 }
 
 func (c *Config) Validate() error {
@@ -316,6 +319,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Display.Validate(); err != nil {
 		return err
+	}
+	if c.Language != "" && c.Language != "de" && c.Language != "en" {
+		return fmt.Errorf("language must be de or en, got %q", c.Language)
 	}
 	// Overlapping indices would silently shadow each other.
 	fixed := map[int]bool{}
@@ -415,7 +421,7 @@ func (c *Config) autoBack(page *Page) (Button, bool) {
 	if taken(page.Buttons) || taken(c.FixedButtons) {
 		return Button{}, false
 	}
-	return backButton(page.BackIndex), true
+	return backButton(page.BackIndex, c.EffectiveLanguage()), true
 }
 
 // ButtonAt resolves the button for a physical index; fixed buttons win.

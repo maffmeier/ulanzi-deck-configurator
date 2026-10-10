@@ -92,6 +92,7 @@ type Daemon struct {
 	// page to go back to when that app loses focus.
 	autoPage   string
 	autoReturn string
+	recentApps []string
 }
 
 func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, engine *WidgetEngine, cfg *deck.Config, log *slog.Logger) *Daemon {
@@ -127,6 +128,7 @@ func (d *Daemon) Config() *deck.Config {
 
 // Run blocks until ctx ends.
 func (d *Daemon) Run(ctx context.Context) {
+	d.engine.SetLanguage(d.Config().EffectiveLanguage())
 	d.mu.Lock()
 	d.applyLocked()
 	d.mu.Unlock()
@@ -148,6 +150,7 @@ func (d *Daemon) ApplyConfig(cfg *deck.Config) {
 	defer d.mu.Unlock()
 	previous := d.page
 	d.cfg = cfg
+	d.engine.SetLanguage(cfg.EffectiveLanguage())
 	d.history = slices.DeleteFunc(d.history, func(p string) bool { return !cfg.HasPage(p) })
 	if !cfg.HasPage(previous) {
 		d.page = cfg.DefaultPage
