@@ -225,6 +225,8 @@ func runCommand(args []string) error {
 	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner}, render.Renderer{}, log.With("component", "widgets"))
 	daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, engine, cfg, log.With("component", "daemon"))
 
+	daemon.SetDesktop(desktopState{})
+
 	go dev.Run(ctx)
 	go daemon.Run(ctx)
 	go application.WatchConfig(ctx, configPath, configfile.Load, daemon.ApplyConfig, log.With("component", "watcher"))

@@ -35,6 +35,7 @@ type heldKey struct {
 }
 
 func (d *Daemon) onPress(index int) {
+	d.markActivity(time.Now())
 	d.mu.Lock()
 	page := d.page
 	var button *deck.Button

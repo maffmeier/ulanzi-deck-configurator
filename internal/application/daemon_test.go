@@ -13,21 +13,33 @@ import (
 )
 
 type fakeDeck struct {
-	mu        sync.Mutex
-	events    chan deck.Event
-	uploads   [][]deck.Button
-	partials  [][]deck.Button
-	modes     []deck.SmallWindowMode
-	data      int
-	keepAlive int
+	mu         sync.Mutex
+	events     chan deck.Event
+	uploads    [][]deck.Button
+	brightness int
+	partials   [][]deck.Button
+	modes      []deck.SmallWindowMode
+	data       int
+	keepAlive  int
 }
 
 func newFakeDeck() *fakeDeck { return &fakeDeck{events: make(chan deck.Event, 8)} }
 
-func (f *fakeDeck) Events() <-chan deck.Event     { return f.events }
-func (f *fakeDeck) Connected() bool               { return true }
-func (f *fakeDeck) SetBrightness(int, bool) error { return nil }
-func (f *fakeDeck) KeepAlive() error              { f.mu.Lock(); f.keepAlive++; f.mu.Unlock(); return nil }
+func (f *fakeDeck) Events() <-chan deck.Event { return f.events }
+func (f *fakeDeck) Connected() bool           { return true }
+func (f *fakeDeck) SetBrightness(v int, _ bool) error {
+	f.mu.Lock()
+	f.brightness = v
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeDeck) currentBrightness() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.brightness
+}
+func (f *fakeDeck) KeepAlive() error { f.mu.Lock(); f.keepAlive++; f.mu.Unlock(); return nil }
 func (f *fakeDeck) SetSmallWindowData(_, _, _ int, _ string) error {
 	f.mu.Lock()
 	f.data++
@@ -174,15 +186,23 @@ func pagedConfig() *deck.Config {
 func startDaemon(t *testing.T, cfg *deck.Config) (*Daemon, *fakeDeck, *fakeRunner) {
 	t.Helper()
 	dev, runner := newFakeDeck(), &fakeRunner{}
+	return newTestDaemon(t, dev, runner, cfg, nil), dev, runner
+}
+
+func newTestDaemon(t *testing.T, dev *fakeDeck, runner *fakeRunner, cfg *deck.Config, desktop DesktopState) *Daemon {
+	t.Helper()
 	log := slog.New(slog.DiscardHandler)
 	engine := NewWidgetEngine(fakeMetrics{}, &fakeSources{}, fakeRenderer{}, log)
 	d := NewDaemon(dev, runner, fakeMetrics{}, fakeRenderer{}, engine, cfg, log)
 	d.timing = pressTiming{longPress: 80 * time.Millisecond, repeatDelay: 60 * time.Millisecond, repeatInterval: 20 * time.Millisecond}
+	if desktop != nil {
+		d.SetDesktop(desktop)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { d.Run(ctx); close(done) }()
 	t.Cleanup(func() { cancel(); <-done })
-	return d, dev, runner
+	return d
 }
 
 func eventually(t *testing.T, cond func() bool) {

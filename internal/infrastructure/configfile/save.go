@@ -87,7 +87,21 @@ type outSmallWindow struct {
 	Widgets              []outWidget `yaml:"widgets,omitempty"`
 }
 
+type outDisplay struct {
+	DimAfterS     int       `yaml:"dim_after_s,omitempty"`
+	DimBrightness int       `yaml:"dim_brightness,omitempty"`
+	OffWhenLocked bool      `yaml:"off_when_locked,omitempty"`
+	Night         *outNight `yaml:"night,omitempty"`
+}
+
+type outNight struct {
+	From       string `yaml:"from"`
+	To         string `yaml:"to"`
+	Brightness int    `yaml:"brightness"`
+}
+
 type outPage struct {
+	Apps      []string    `yaml:"apps,omitempty"`
 	Folder    bool        `yaml:"folder,omitempty"`
 	BackIndex int         `yaml:"back_index,omitempty"`
 	Buttons   []outButton `yaml:"buttons"`
@@ -96,6 +110,7 @@ type outPage struct {
 type outConfig struct {
 	DefaultPage  string         `yaml:"default_page"`
 	Brightness   *int           `yaml:"brightness,omitempty"`
+	Display      *outDisplay    `yaml:"display,omitempty"`
 	SmallWindow  outSmallWindow `yaml:"small_window"`
 	Pages        yaml.Node      `yaml:"pages"`
 	FixedButtons []outButton    `yaml:"fixed_buttons,omitempty"`
@@ -118,6 +133,12 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 		},
 		Pages: yaml.Node{Kind: yaml.MappingNode},
 	}
+	if d := cfg.Display; d.DimAfterS > 0 || d.OffWhenLocked || d.Night != nil {
+		out.Display = &outDisplay{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked}
+		if n := d.Night; n != nil {
+			out.Display.Night = &outNight{From: n.From, To: n.To, Brightness: n.Brightness}
+		}
+	}
 	if cfg.Brightness != deck.DefaultBrightness {
 		b := cfg.Brightness
 		out.Brightness = &b
@@ -131,7 +152,7 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 
 	for _, page := range cfg.Pages {
 		var value yaml.Node
-		if err := value.Encode(outPage{Folder: page.Folder, BackIndex: page.BackIndex, Buttons: outButtons(page.Buttons)}); err != nil {
+		if err := value.Encode(outPage{Apps: page.Apps, Folder: page.Folder, BackIndex: page.BackIndex, Buttons: outButtons(page.Buttons)}); err != nil {
 			return nil, err
 		}
 		out.Pages.Content = append(out.Pages.Content,

@@ -82,6 +82,17 @@ type editorPage struct {
 	Buttons   []editorButton `json:"buttons"`
 	Folder    bool           `json:"folder"`
 	BackIndex int            `json:"back_index"`
+	Apps      []string       `json:"apps"`
+}
+
+type editorDisplay struct {
+	DimAfterS     int    `json:"dim_after_s"`
+	DimBrightness int    `json:"dim_brightness"`
+	OffWhenLocked bool   `json:"off_when_locked"`
+	NightEnabled  bool   `json:"night_enabled"`
+	NightFrom     string `json:"night_from"`
+	NightTo       string `json:"night_to"`
+	NightBright   int    `json:"night_brightness"`
 }
 
 type editorSmallWindow struct {
@@ -102,6 +113,7 @@ type editorConfig struct {
 	ConfigExists            bool              `json:"config_exists"`
 	DefaultPage             string            `json:"default_page"`
 	Brightness              int               `json:"brightness"`
+	Display                 editorDisplay     `json:"display"`
 	Pages                   []editorPage      `json:"pages"`
 	FixedButtons            []editorButton    `json:"fixed_buttons"`
 	SmallWindow             editorSmallWindow `json:"small_window"`
@@ -112,6 +124,7 @@ type editorConfig struct {
 type editorPutRequest struct {
 	DefaultPage        string            `json:"default_page"`
 	Brightness         *int              `json:"brightness"`
+	Display            editorDisplay     `json:"display"`
 	Pages              []editorPage      `json:"pages"`
 	FixedButtons       []editorButton    `json:"fixed_buttons"`
 	SmallWindow        editorSmallWindow `json:"small_window"`
@@ -301,6 +314,7 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 		ConfigExists: exists,
 		DefaultPage:  cfg.DefaultPage,
 		Brightness:   cfg.Brightness,
+		Display:      toEditorDisplay(cfg.Display),
 		Pages:        []editorPage{},
 		FixedButtons: []editorButton{},
 		SmallWindow: editorSmallWindow{
@@ -317,7 +331,7 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 		},
 	}
 	for _, p := range cfg.Pages {
-		page := editorPage{Name: p.Name, Buttons: []editorButton{}, Folder: p.Folder, BackIndex: p.BackIndex}
+		page := editorPage{Name: p.Name, Buttons: []editorButton{}, Folder: p.Folder, BackIndex: p.BackIndex, Apps: nonNil(p.Apps)}
 		for _, b := range p.Buttons {
 			page.Buttons = append(page.Buttons, toEditorButton(b))
 		}
@@ -335,6 +349,33 @@ func toEditorWidgets(ws []deck.Widget) []editorWidget {
 		out = append(out, toEditorWidget(w))
 	}
 	return out
+}
+
+func cleanList(items []string) []string {
+	var out []string
+	for _, s := range items {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func toEditorDisplay(d deck.Display) editorDisplay {
+	ed := editorDisplay{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked,
+		NightFrom: "22:00", NightTo: "07:00", NightBright: 20}
+	if n := d.Night; n != nil {
+		ed.NightEnabled, ed.NightFrom, ed.NightTo, ed.NightBright = true, n.From, n.To, n.Brightness
+	}
+	return ed
+}
+
+func fromEditorDisplay(ed editorDisplay) deck.Display {
+	d := deck.Display{DimAfterS: ed.DimAfterS, DimBrightness: ed.DimBrightness, OffWhenLocked: ed.OffWhenLocked}
+	if ed.NightEnabled {
+		d.Night = &deck.NightMode{From: ed.NightFrom, To: ed.NightTo, Brightness: ed.NightBright}
+	}
+	return d
 }
 
 func nonNil(s []string) []string {
@@ -457,6 +498,7 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 	if req.Brightness != nil {
 		cfg.Brightness = *req.Brightness
 	}
+	cfg.Display = fromEditorDisplay(req.Display)
 	var names []string
 	for _, p := range req.Pages {
 		name := strings.TrimSpace(p.Name)
@@ -471,7 +513,7 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons, Folder: p.Folder, BackIndex: p.BackIndex})
+		cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons, Folder: p.Folder, BackIndex: p.BackIndex, Apps: cleanList(p.Apps)})
 	}
 	if len(cfg.Pages) == 0 {
 		return nil, errors.New("at least one page is required")

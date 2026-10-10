@@ -94,11 +94,24 @@ type rawPage struct {
 	Buttons   []rawButton `yaml:"buttons"`
 	Folder    bool        `yaml:"folder"`
 	BackIndex int         `yaml:"back_index"`
+	Apps      []string    `yaml:"apps"`
+}
+
+type rawDisplay struct {
+	DimAfterS     int  `yaml:"dim_after_s"`
+	DimBrightness int  `yaml:"dim_brightness"`
+	OffWhenLocked bool `yaml:"off_when_locked"`
+	Night         *struct {
+		From       string `yaml:"from"`
+		To         string `yaml:"to"`
+		Brightness int    `yaml:"brightness"`
+	} `yaml:"night"`
 }
 
 type rawConfig struct {
 	DefaultPage  string          `yaml:"default_page"`
 	Brightness   *int            `yaml:"brightness"`
+	Display      *rawDisplay     `yaml:"display"`
 	SmallWindow  *rawSmallWindow `yaml:"small_window"`
 	Pages        yaml.Node       `yaml:"pages"`
 	FixedButtons []rawButton     `yaml:"fixed_buttons"`
@@ -125,6 +138,12 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 	if raw.Brightness != nil {
 		cfg.Brightness = *raw.Brightness
 	}
+	if d := raw.Display; d != nil {
+		cfg.Display = deck.Display{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked}
+		if d.Night != nil {
+			cfg.Display.Night = &deck.NightMode{From: d.Night.From, To: d.Night.To, Brightness: d.Night.Brightness}
+		}
+	}
 
 	sw, err := parseSmallWindow(raw.SmallWindow, baseDir)
 	if err != nil {
@@ -149,7 +168,7 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 			if page.BackIndex < 0 || page.BackIndex >= deck.ButtonCount {
 				return nil, fmt.Errorf("page %q: back_index must be in 0..%d", name, deck.ButtonCount-1)
 			}
-			cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons, Folder: page.Folder, BackIndex: page.BackIndex})
+			cfg.Pages = append(cfg.Pages, deck.Page{Name: name, Buttons: buttons, Folder: page.Folder, BackIndex: page.BackIndex, Apps: page.Apps})
 		}
 		if cfg.FixedButtons, err = parseButtons(raw.FixedButtons, "fixed_buttons", baseDir); err != nil {
 			return nil, err

@@ -168,6 +168,8 @@ type Page struct {
 	// automatic back key at BackIndex unless that index is taken.
 	Folder    bool
 	BackIndex int
+	// Apps switch the deck to this page while one of them has focus.
+	Apps []string
 }
 
 // backButton is the automatic key that leaves a folder.
@@ -291,6 +293,7 @@ type Config struct {
 	DefaultPage  string
 	SmallWindow  SmallWindow
 	Brightness   int
+	Display      Display
 }
 
 func (c *Config) Validate() error {
@@ -310,6 +313,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Brightness < 0 || c.Brightness > 100 {
 		return fmt.Errorf("brightness must be in 0..100, got %d", c.Brightness)
+	}
+	if err := c.Display.Validate(); err != nil {
+		return err
 	}
 	// Overlapping indices would silently shadow each other.
 	fixed := map[int]bool{}

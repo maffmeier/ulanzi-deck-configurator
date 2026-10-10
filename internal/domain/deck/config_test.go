@@ -3,6 +3,7 @@ package deck
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func threePages() *Config {
@@ -178,5 +179,47 @@ func TestActionValidation(t *testing.T) {
 		if err := a.Validate(); err == nil {
 			t.Fatalf("%+v must fail", a)
 		}
+	}
+}
+
+func TestTargetBrightnessRules(t *testing.T) {
+	cfg := threePages()
+	cfg.Brightness = 80
+	cfg.Display = Display{DimAfterS: 60, DimBrightness: 10, OffWhenLocked: true, Night: &NightMode{From: "22:00", To: "07:00", Brightness: 30}}
+	day := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	night := time.Date(2026, 1, 1, 23, 30, 0, 0, time.UTC)
+	early := time.Date(2026, 1, 1, 6, 59, 0, 0, time.UTC)
+	cases := []struct {
+		now    time.Time
+		idle   time.Duration
+		locked bool
+		want   int
+	}{
+		{day, 0, false, 80},
+		{day, 2 * time.Minute, false, 10},
+		{night, 0, false, 30},
+		{early, 0, false, 30},
+		{night, 2 * time.Minute, false, 10},
+		{day, 0, true, 0},
+	}
+	for i, c := range cases {
+		if got := cfg.TargetBrightness(c.now, c.idle, c.locked); got != c.want {
+			t.Fatalf("case %d: got %d want %d", i, got, c.want)
+		}
+	}
+}
+
+func TestPageForApp(t *testing.T) {
+	cfg := threePages()
+	cfg.Pages[1].Apps = []string{"code", "jetbrains"}
+	cfg.Pages[2].Apps = []string{"OBS"}
+	if p, ok := cfg.PageForApp("Code"); !ok || p != "b" {
+		t.Fatalf("got %q", p)
+	}
+	if p, _ := cfg.PageForApp("com.obsproject.Studio"); p != "c" {
+		t.Fatalf("got %q", p)
+	}
+	if _, ok := cfg.PageForApp("firefox"); ok {
+		t.Fatal("no match expected")
 	}
 }

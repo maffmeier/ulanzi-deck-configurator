@@ -240,7 +240,8 @@ window.deckApp = function deckApp() {
                 path: payload.path,
                 default_page: payload.default_page,
                 brightness: Number.isFinite(payload.brightness) ? payload.brightness : 50,
-                pages: (payload.pages || []).map((p) => ({ name: p.name, folder: Boolean(p.folder), back_index: p.back_index || 0, buttons: (p.buttons || []).map(normalizeButton) })),
+                pages: (payload.pages || []).map((p) => ({ name: p.name, folder: Boolean(p.folder), back_index: p.back_index || 0, apps: p.apps || [], buttons: (p.buttons || []).map(normalizeButton) })),
+                display: { dim_after_s: 0, dim_brightness: 10, off_when_locked: false, night_enabled: false, night_from: "22:00", night_to: "07:00", night_brightness: 20, ...(payload.display || {}) },
                 fixed_buttons: (payload.fixed_buttons || []).map(normalizeButton),
                 small_window: {
                     enabled: Boolean(sw.enabled),
@@ -284,7 +285,13 @@ window.deckApp = function deckApp() {
             return {
                 default_page: this.editor.default_page,
                 brightness: Number(this.editor.brightness),
-                pages: this.editor.pages.map((p) => ({ name: p.name, folder: p.folder, back_index: Number(p.back_index) || 0, buttons: this.serializeButtons(p.buttons) })),
+                pages: this.editor.pages.map((p) => ({ name: p.name, folder: p.folder, back_index: Number(p.back_index) || 0, apps: p.apps || [], buttons: this.serializeButtons(p.buttons) })),
+                display: {
+                    ...this.editor.display,
+                    dim_after_s: Number(this.editor.display.dim_after_s) || 0,
+                    dim_brightness: Number(this.editor.display.dim_brightness) || 0,
+                    night_brightness: Number(this.editor.display.night_brightness) || 0,
+                },
                 fixed_buttons: this.serializeButtons(this.editor.fixed_buttons),
                 small_window: {
                     ...sw,

@@ -84,6 +84,14 @@ type Daemon struct {
 	toggled map[string]bool
 
 	integrations Integrations
+
+	desktop      DesktopState
+	lastActivity time.Time
+	locked       bool
+	// autoPage is the page switched to for the focused app, autoReturn the
+	// page to go back to when that app loses focus.
+	autoPage   string
+	autoReturn string
 }
 
 func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, engine *WidgetEngine, cfg *deck.Config, log *slog.Logger) *Daemon {
@@ -128,6 +136,8 @@ func (d *Daemon) Run(ctx context.Context) {
 	wg.Go(func() { d.statusLoop(ctx) })
 	wg.Go(func() { d.engine.Run(ctx) })
 	wg.Go(func() { d.liveLoop(ctx) })
+	wg.Go(func() { d.displayLoop(ctx) })
+	wg.Go(func() { d.appLoop(ctx) })
 	wg.Wait()
 }
 
@@ -181,7 +191,12 @@ func (d *Daemon) SwitchTo(target string) {
 }
 
 func (d *Daemon) applyLocked() {
-	d.logErr("set brightness", d.dev.SetBrightness(d.cfg.Brightness, false))
+	now := time.Now()
+	if d.lastActivity.IsZero() {
+		d.lastActivity = now
+	}
+	target := d.cfg.TargetBrightness(now, now.Sub(d.lastActivity), d.locked)
+	d.logErr("set brightness", d.dev.SetBrightness(target, false))
 	d.pushPageLocked()
 }
 
