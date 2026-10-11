@@ -528,6 +528,16 @@
               <input type="password" x-model="secrets.obs_password" :placeholder="secrets.obs_password_set ? t('integrations.stored') : ''" autocomplete="off" /></label>
           </div>
           <p class="hint" x-text="t('integrations.obsHint')"></p>
+          <h4>MQTT</h4>
+          <div class="row">
+            <label class="field grow"><span x-text="t('integrations.broker')"></span>
+              <input type="text" x-model="secrets.mqtt_url" placeholder="mqtt://homeassistant.local:1883" /></label>
+            <label class="field"><span x-text="t('integrations.username')"></span>
+              <input type="text" x-model="secrets.mqtt_username" autocomplete="off" /></label>
+            <label class="field"><span x-text="t('integrations.password')"></span>
+              <input type="password" x-model="secrets.mqtt_password" :placeholder="secrets.mqtt_password_set ? t('integrations.stored') : ''" autocomplete="off" /></label>
+          </div>
+          <p class="hint" x-text="t('integrations.mqttHint')"></p>
           <h4>Microsoft Teams</h4>
           <div class="row">
             <span class="test-result" :class="secrets.teams_paired ? 'ok' : ''" x-text="t(secrets.teams_paired ? 'integrations.teamsPaired' : 'integrations.teamsNotPaired')"></span>
@@ -713,6 +723,17 @@
         <input type="text" x-model="a.target" @input="markDirty()" :placeholder="a.op === 'switch_scene' ? 'Kamera' : 'Mic/Aux'" /></label>
     </div>
   </template>
+  <template x-if="a.type === 'mqtt'">
+    <div class="field-group">
+      <div class="row">
+        <label class="field grow"><span>Topic</span>
+          <input type="text" class="mono" x-model="a.topic" @input="markDirty()" placeholder="zigbee2mqtt/lampe/set" /></label>
+        <label class="check"><input type="checkbox" x-model="a.retain" @change="markDirty()" /> <span x-text="t('field.retain')"></span></label>
+      </div>
+      <label class="field"><span x-text="t('field.payload')"></span>
+        <textarea class="mono" rows="2" x-model="a.body" @input="markDirty()" placeholder='{"state": "TOGGLE"}'></textarea></label>
+    </div>
+  </template>
   <template x-if="a.type === 'meeting'">
     <div class="row">
       <label class="field"><span x-text="t('field.meetingApp')"></span>
@@ -827,6 +848,16 @@
     <label class="field"><span x-text="t('field.commandOutput')"></span>
       <input type="text" class="mono" x-model="w.cmd" @input="markDirty()" placeholder="curl -s 'wttr.in/Berlin?format=3'" /></label>
   </template>
+  <template x-if="w.type === 'mqtt'">
+    <div class="row">
+      <label class="field grow"><span>Topic</span>
+        <input type="text" class="mono" x-model="w.topic" @input="markDirty()" placeholder="zigbee2mqtt/lampe" /></label>
+      <label class="field"><span x-text="t('field.jsonField')"></span>
+        <input type="text" class="mono" x-model="w.attribute" @input="markDirty()" placeholder="state" /></label>
+      <label class="field"><span x-text="t('field.activeState')"></span>
+        <input type="text" class="mono" x-model="w.active_state" @input="markDirty()" placeholder="on" /></label>
+    </div>
+  </template>
   <template x-if="w.type === 'home_assistant'">
     <div class="row">
       <label class="field grow"><span>Entity</span>
@@ -837,7 +868,7 @@
         <input type="text" class="mono" x-model="w.active_state" @input="markDirty()" placeholder="on" /></label>
     </div>
   </template>
-  <template x-if="w.type === 'command' || w.type === 'home_assistant' || w.type === 'audio'">
+  <template x-if="w.type === 'command' || w.type === 'home_assistant' || w.type === 'audio' || w.type === 'mqtt'">
     <div class="row">
       <label class="check"><input type="checkbox" :checked="!!w.ok_color" @change="w.ok_color = $event.target.checked ? '#14532D' : ''; markDirty()" />
         <span x-text="t(w.type === 'command' ? 'field.okColor' : w.type === 'audio' ? 'field.audioOnColor' : 'field.activeColor')"></span></label>
@@ -860,6 +891,7 @@
   <template x-if="w.type === 'obs'"><p class="hint" x-text="t('widgetHint.obs')"></p></template>
   <template x-if="w.type === 'audio'"><p class="hint" x-text="t('widgetHint.audio')"></p></template>
   <template x-if="w.type === 'meeting'"><p class="hint" x-text="t('widgetHint.meeting')"></p></template>
+  <template x-if="w.type === 'mqtt'"><p class="hint" x-text="t('widgetHint.mqtt')"></p></template>
 </template>
 
 <datalist id="ha-services">

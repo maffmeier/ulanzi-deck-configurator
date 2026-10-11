@@ -10,12 +10,13 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
 )
 
-// integrationRunner executes home_assistant, obs and meeting actions with
-// the credentials from secrets.yaml.
+// integrationRunner executes home_assistant, obs, meeting and mqtt actions
+// with the credentials from secrets.yaml.
 type integrationRunner struct {
 	secrets *integrations.SecretStore
 	obs     *integrations.OBSClient
 	teams   *integrations.TeamsClient
+	mqtt    *integrations.MQTTClient
 	runner  *actions.Runner
 	log     *slog.Logger
 }
@@ -29,6 +30,8 @@ func (r integrationRunner) Run(a deck.Action) error {
 		return r.obs.Run(s.OBS, a.Op, a.Target)
 	case deck.ActionMeeting:
 		return r.meeting(a)
+	case deck.ActionMQTT:
+		return r.mqtt.Publish(a.Topic, a.Body, a.Retain)
 	}
 	return fmt.Errorf("unsupported integration action %q", a.Type)
 }

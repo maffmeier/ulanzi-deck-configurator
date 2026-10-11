@@ -24,6 +24,7 @@ const (
 	ActionOBS        ActionType = "obs"
 	ActionAudio      ActionType = "audio"
 	ActionMeeting    ActionType = "meeting"
+	ActionMQTT       ActionType = "mqtt"
 )
 
 // MeetingOps lists what each meeting app can do from the deck.
@@ -62,6 +63,18 @@ const (
 )
 
 var AudioOps = []string{AudioVolumeUp, AudioVolumeDown, AudioMute, AudioMicMute, AudioOutputNext, AudioOutputSet}
+
+// ValidateMQTTTopic accepts concrete topics only: actions publish to them
+// and widgets show the one value they carry.
+func ValidateMQTTTopic(topic string) error {
+	if strings.TrimSpace(topic) == "" {
+		return fmt.Errorf("mqtt needs a topic")
+	}
+	if strings.ContainsAny(topic, "+#") {
+		return fmt.Errorf("mqtt topic %q must not contain wildcards", topic)
+	}
+	return nil
+}
 
 // Special switch_page targets that page relative to the current page.
 const (
@@ -183,6 +196,10 @@ func (a Action) validate(inMulti bool) error {
 		if (a.Op == "switch_scene" || a.Op == "toggle_mute") && strings.TrimSpace(a.Target) == "" {
 			return fmt.Errorf("obs %s needs a target", a.Op)
 		}
+	case ActionMQTT:
+		if err := ValidateMQTTTopic(a.Topic); err != nil {
+			return err
+		}
 	case ActionMeeting:
 		ops, ok := MeetingOps[a.App]
 		if !ok {
@@ -243,6 +260,8 @@ func (a Action) Clean() Action {
 		clean.Op, clean.Target = a.Op, a.Target
 	case ActionMeeting:
 		clean.App, clean.Op = a.App, a.Op
+	case ActionMQTT:
+		clean.Topic, clean.Body, clean.Retain = a.Topic, a.Body, a.Retain
 	case ActionAudio:
 		clean.Op = a.Op
 		switch a.Op {

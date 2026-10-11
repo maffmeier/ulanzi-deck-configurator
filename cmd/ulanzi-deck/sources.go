@@ -23,6 +23,10 @@ func (s widgetSources) HomeAssistantState(entityID string) (application.HomeStat
 
 func (s widgetSources) OBSStatus() (application.OBSInfo, error) { return s.integrations.obsStatus() }
 
+func (s widgetSources) MQTTValue(topic string) (string, bool, error) {
+	return s.integrations.mqtt.Value(topic)
+}
+
 func (s widgetSources) MeetingState() (application.MeetingInfo, error) {
 	return s.integrations.meetingState()
 }

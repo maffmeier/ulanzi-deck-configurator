@@ -11,7 +11,7 @@ const SLOTS = Object.freeze([
 
 const ACTION_TYPES = Object.freeze([
     "none", "shell", "shortcut", "type_text", "url", "http", "switch_page",
-    "predefined_command", "multi", "timer", "audio", "meeting", "home_assistant", "obs",
+    "predefined_command", "multi", "timer", "audio", "meeting", "home_assistant", "obs", "mqtt",
 ]);
 const PRESS_MODES = Object.freeze(["tap", "repeat", "hold"]);
 const TIMER_OPS = Object.freeze(["toggle", "start", "pause", "reset"]);
@@ -31,7 +31,7 @@ const MEETING_OPS = Object.freeze({
 const MEETING_SHOWS = Object.freeze(["mute", "camera", "hand"]);
 const WIDGET_TYPES = Object.freeze([
     { id: "clock" }, { id: "metrics" }, { id: "command" }, { id: "graph" },
-    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" },
+    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" }, { id: "mqtt" },
 ]);
 const GRAPH_METRICS = Object.freeze(["cpu", "memory", "network"]);
 const METRICS = Object.freeze(["cpu", "memory", "gpu", "temperature", "disk", "network", "battery"]);
@@ -50,6 +50,7 @@ const ACTION_ICONS = Object.freeze({
     obs: "fa:solid:video",
     audio: "fa:solid:volume-high",
     meeting: "fa:solid:users",
+    mqtt: "fa:solid:tower-cell",
 });
 
 // Presets of the action list; label/hint are i18n keys. The backend's
@@ -124,6 +125,8 @@ const BASE_GROUPS = Object.freeze([
             { id: "obs-scene", key: "obsScene", icon: "fa:solid:film", action: { type: "obs", op: "switch_scene" }, focus: true },
             { id: "obs-record", key: "obsRecord", icon: "fa:solid:circle-dot", action: { type: "obs", op: "toggle_record" }, live: { type: "obs", show: "record" } },
             { id: "obs-stream", key: "obsStream", icon: "fa:solid:tower-broadcast", action: { type: "obs", op: "toggle_stream" }, live: { type: "obs", show: "stream" } },
+            { id: "mqtt-publish", key: "mqttPublish", icon: "fa:solid:tower-cell", action: { type: "mqtt", topic: "", body: "" }, focus: true },
+            { id: "mqtt-value", key: "mqttValue", icon: "fa:solid:satellite-dish", live: { type: "mqtt", topic: "" } },
             { id: "obs-mute", key: "obsMute", icon: "fa:solid:microphone-slash", action: { type: "obs", op: "toggle_mute", target: "Mic/Aux" }, useIcon: true },
         ],
     },
@@ -601,6 +604,7 @@ window.deckApp = function deckApp() {
                 case "obs": return `OBS: ${this.t("obs." + a.op)} ${a.target}`;
                 case "audio": return `${this.t("audio." + a.op)} ${a.target}`.trim();
                 case "meeting": return `${this.t("meetingApp." + a.app)}: ${this.t("meeting." + a.op)}`;
+                case "mqtt": return `MQTT ${a.topic}`;
             }
             return "";
         },
@@ -1325,6 +1329,7 @@ window.deckApp = function deckApp() {
             if (w.type === "image") return w.paths.length > 0;
             if (w.type === "metrics") return w.items.length > 0;
             if (w.type === "home_assistant") return w.entity_id.trim() !== "";
+            if (w.type === "mqtt") return w.topic.trim() !== "" && !/[+#]/.test(w.topic);
             return w.type !== "none";
         },
 

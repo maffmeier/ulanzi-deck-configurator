@@ -742,6 +742,12 @@ func (s *Server) testSecrets(w http.ResponseWriter, r *http.Request) {
 			result["obs"] = err.Error()
 		}
 	}
+	if sec.MQTT.URL != "" {
+		result["mqtt"] = "ok"
+		if err := integrations.CheckMQTT(sec.MQTT); err != nil {
+			result["mqtt"] = err.Error()
+		}
+	}
 	// Teams is only reported when it is in use, it has no URL to configure.
 	if err := integrations.CheckTeams(sec.Teams.Token); err == nil {
 		result["teams"] = "ok"

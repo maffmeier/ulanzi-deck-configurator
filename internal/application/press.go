@@ -215,7 +215,7 @@ func (d *Daemon) execute(action deck.Action, index int, page string) {
 	case deck.ActionMulti:
 		d.runMulti(action, index, page)
 		return
-	case deck.ActionHome, deck.ActionOBS, deck.ActionMeeting:
+	case deck.ActionHome, deck.ActionOBS, deck.ActionMeeting, deck.ActionMQTT:
 		if d.integrations == nil {
 			d.log.Error("integration not available", "action", action.Type)
 			return
@@ -224,8 +224,12 @@ func (d *Daemon) execute(action deck.Action, index int, page string) {
 			if err := d.integrations.Run(action); err != nil {
 				d.log.Error("integration action failed", "index", index, "action", action.Type, "error", err)
 			}
-			if action.Type == deck.ActionMeeting {
+			switch action.Type {
+			case deck.ActionMeeting:
 				d.engine.ExpireMeeting()
+				d.refreshWidgets()
+			case deck.ActionMQTT:
+				d.engine.ExpireMQTT()
 				d.refreshWidgets()
 			}
 		}()

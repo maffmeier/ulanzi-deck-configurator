@@ -247,6 +247,7 @@ func runCommand(args []string) error {
 	secrets := integrations.NewSecretStore(integrations.SecretsPath(configPath))
 	integ := integrationRunner{
 		secrets: secrets, obs: integrations.NewOBSClient(), teams: integrations.NewTeamsClient(secrets, version),
+		mqtt:   integrations.NewMQTTClient(secrets),
 		runner: runner, log: log.With("component", "integrations"),
 	}
 	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner, integrations: integ}, render.Renderer{}, log.With("component", "widgets"))

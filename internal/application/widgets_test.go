@@ -35,6 +35,9 @@ func (f *fakeSources) OBSStatus() (OBSInfo, error) {
 	return OBSInfo{Scene: "Kamera", Recording: true, RecordTime: "00:01:02"}, nil
 }
 func (f *fakeSources) Cover(string) image.Image { return nil }
+func (f *fakeSources) MQTTValue(topic string) (string, bool, error) {
+	return `{"state":"ON","sensor":{"temperature":21.5}}`, topic != "empty", nil
+}
 func (f *fakeSources) MeetingState() (MeetingInfo, error) {
 	return MeetingInfo{InMeeting: true, Muted: true, HandRaised: true}, nil
 }
@@ -222,5 +225,21 @@ func TestMeetingWidget(t *testing.T) {
 		w := deck.Widget{Type: deck.WidgetMeeting, Show: show}
 		e.Render(w, 196, 196, "#000000", time.Now())
 		eventually(t, func() bool { return string(e.Render(w, 196, 196, "#000000", time.Now())) == want })
+	}
+}
+
+func TestMQTTWidget(t *testing.T) {
+	e := newEngine(&fakeSources{})
+	cases := []struct {
+		w    deck.Widget
+		want string
+	}{
+		{deck.Widget{Type: deck.WidgetMQTT, Topic: "z2m/lamp", Attribute: "state", ActiveState: "on", OkColor: "#FACC15"}, "text|#FACC15|lamp|[ON]"},
+		{deck.Widget{Type: deck.WidgetMQTT, Topic: "z2m/sensor", Attribute: "sensor.temperature", ActiveState: "on", FailColor: "#111111"}, "text|#111111|sensor|[21.5]"},
+		{deck.Widget{Type: deck.WidgetMQTT, Topic: "empty", Title: "Leer"}, "text|#000000|Leer|[…]"},
+	}
+	for _, c := range cases {
+		e.Render(c.w, 196, 196, "#000000", time.Now())
+		eventually(t, func() bool { return string(e.Render(c.w, 196, 196, "#000000", time.Now())) == c.want })
 	}
 }

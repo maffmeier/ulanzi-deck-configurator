@@ -442,6 +442,20 @@ window.I18N = {
         "integrationName.obs": "OBS",
         "integrationName.teams": "Teams",
         "integrationName.mqtt": "MQTT",
+
+        "action.mqtt": "MQTT senden",
+        "widget.mqtt": "MQTT-Wert",
+        "field.retain": "Retain (Broker merkt sich den Wert)",
+        "field.payload": "Nachricht",
+        "field.jsonField": "JSON-Feld",
+        "widgetHint.mqtt": "Zeigt die letzte Nachricht des Topics; bei JSON das angegebene Feld (z. B. state oder sensor.temperature). Entspricht der Wert dem aktiven Zustand, färbt sich die Taste.",
+        "integrations.broker": "Broker",
+        "integrations.username": "Benutzer",
+        "integrations.mqttHint": "mqtt:// für unverschlüsselt (Port 1883), mqtts:// für TLS (Port 8883).",
+        "preset.mqttPublish": "MQTT senden",
+        "preset.mqttPublishHint": "Schickt eine Nachricht an ein Topic, z. B. für zigbee2mqtt oder Node-RED",
+        "preset.mqttValue": "MQTT-Wert",
+        "preset.mqttValueHint": "Zeigt den aktuellen Wert eines Topics",
     },
 
     en: {
@@ -884,6 +898,20 @@ window.I18N = {
         "integrationName.obs": "OBS",
         "integrationName.teams": "Teams",
         "integrationName.mqtt": "MQTT",
+
+        "action.mqtt": "MQTT publish",
+        "widget.mqtt": "MQTT value",
+        "field.retain": "Retain (broker keeps the value)",
+        "field.payload": "Payload",
+        "field.jsonField": "JSON field",
+        "widgetHint.mqtt": "Shows the latest message on the topic; for JSON the given field (e.g. state or sensor.temperature). The key is colored when the value equals the active state.",
+        "integrations.broker": "Broker",
+        "integrations.username": "User",
+        "integrations.mqttHint": "mqtt:// for plain connections (port 1883), mqtts:// for TLS (port 8883).",
+        "preset.mqttPublish": "MQTT publish",
+        "preset.mqttPublishHint": "Publishes a message to a topic, e.g. for zigbee2mqtt or Node-RED",
+        "preset.mqttValue": "MQTT value",
+        "preset.mqttValueHint": "Shows the current value of a topic",
     },
 };
 

@@ -20,6 +20,7 @@ const (
 	WidgetOBS     WidgetType = "obs"
 	WidgetAudio   WidgetType = "audio"
 	WidgetMeeting WidgetType = "meeting"
+	WidgetMQTT    WidgetType = "mqtt"
 )
 
 // MeetingShows are the Teams states a meeting widget can display.
@@ -141,6 +142,16 @@ func (w *Widget) Normalize(onKey bool) error {
 		if err := normalizeColors(w); err != nil {
 			return err
 		}
+	case WidgetMQTT:
+		if err := ValidateMQTTTopic(w.Topic); err != nil {
+			return err
+		}
+		if w.ActiveState == "" {
+			w.ActiveState = "on"
+		}
+		if err := normalizeColors(w); err != nil {
+			return err
+		}
 	case WidgetMeeting:
 		if w.Show == "" {
 			w.Show = "mute"
@@ -186,6 +197,9 @@ func (w Widget) Clean() Widget {
 		clean.Title, clean.Show = w.Title, w.Show
 	case WidgetMeeting:
 		clean.Title, clean.Show = w.Title, w.Show
+	case WidgetMQTT:
+		clean.Title, clean.Topic, clean.Attribute, clean.ActiveState = w.Title, w.Topic, w.Attribute, w.ActiveState
+		clean.OkColor, clean.FailColor = w.OkColor, w.FailColor
 	case WidgetAudio:
 		clean.Title, clean.Show, clean.OkColor, clean.FailColor = w.Title, w.Show, w.OkColor, w.FailColor
 		if w.Show == "volume" {
