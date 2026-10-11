@@ -33,7 +33,7 @@ const TRIGGER_EVENTS = Object.freeze(["time", "startup", "connect", "lock", "unl
 const WEEKDAYS = Object.freeze(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
 const WIDGET_TYPES = Object.freeze([
     { id: "clock" }, { id: "metrics" }, { id: "command" }, { id: "graph" },
-    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" }, { id: "mqtt" },
+    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "calendar" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" }, { id: "mqtt" },
 ]);
 const GRAPH_METRICS = Object.freeze(["cpu", "memory", "network"]);
 const METRICS = Object.freeze(["cpu", "memory", "gpu", "temperature", "disk", "network", "battery"]);
@@ -92,6 +92,7 @@ const BASE_GROUPS = Object.freeze([
             { id: "live-cpu", key: "liveCpu", icon: "fa:solid:chart-line", live: { type: "graph", metric: "cpu" } },
             { id: "live-media", key: "liveMedia", icon: "fa:solid:music", live: { type: "media" } },
             { id: "live-command", key: "liveCommand", icon: "fa:solid:terminal", live: { type: "command" } },
+            { id: "live-calendar", key: "liveCalendar", icon: "fa:solid:calendar-day", live: { type: "calendar", interval_s: 300 } },
         ],
     },
     {
@@ -171,7 +172,7 @@ function normalizeAction(raw) {
 function emptyWidget(type = "none") {
     return {
         type, title: "", format: "%H:%M", items: type === "metrics" ? ["cpu", "memory"] : [],
-        cmd: "", interval_s: 5, metric: "cpu", paths: [], ok_color: "", fail_color: "",
+        cmd: "", interval_s: type === "calendar" ? 300 : 5, metric: "cpu", paths: [], ok_color: "", fail_color: "",
         entity_id: "", attribute: "", active_state: "on", show: type === "audio" ? "volume" : "scene",
         target: "", topic: "", url: "", plugin: "", settings: {},
     };
@@ -1336,6 +1337,7 @@ window.deckApp = function deckApp() {
             if (w.type === "metrics") return w.items.length > 0;
             if (w.type === "home_assistant") return w.entity_id.trim() !== "";
             if (w.type === "mqtt") return w.topic.trim() !== "" && !/[+#]/.test(w.topic);
+            if (w.type === "calendar") return w.url.trim() !== "";
             return w.type !== "none";
         },
 

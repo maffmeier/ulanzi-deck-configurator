@@ -243,3 +243,28 @@ func TestMQTTWidget(t *testing.T) {
 		eventually(t, func() bool { return string(e.Render(c.w, 196, 196, "#000000", time.Now())) == c.want })
 	}
 }
+
+func TestNextEventAndWhen(t *testing.T) {
+	e := newEngine(&fakeSources{})
+	e.SetLanguage("de")
+	now := time.Date(2026, 10, 12, 9, 0, 0, 0, time.Local)
+	at := func(h, m int, days int) time.Time { return time.Date(2026, 10, 12+days, h, m, 0, 0, time.Local) }
+	events := []CalendarEvent{
+		{Summary: "Feiertag", Start: at(0, 0, 0), End: at(0, 0, 1), AllDay: true},
+		{Summary: "vorbei", Start: at(7, 0, 0), End: at(8, 0, 0)},
+		{Summary: "Standup", Start: at(9, 20, 0), End: at(9, 35, 0)},
+	}
+	ev, ok := nextEvent(events, now)
+	if !ok || ev.Summary != "Standup" || e.eventWhen(ev, now) != "in 20 min" {
+		t.Fatalf("next %+v %q", ev, e.eventWhen(ev, now))
+	}
+	if got := e.eventWhen(CalendarEvent{Start: at(14, 0, 1), End: at(15, 0, 1)}, now); got != "morgen 14:00" {
+		t.Fatalf("tomorrow: %q", got)
+	}
+	if got := e.eventWhen(CalendarEvent{Start: at(14, 0, 3), End: at(15, 0, 3)}, now); got != "Do 14:00" {
+		t.Fatalf("weekday: %q", got)
+	}
+	if ev, _ := nextEvent(events[:2], now); !ev.AllDay || e.eventWhen(ev, now) != "heute" {
+		t.Fatalf("all-day fallback %+v", ev)
+	}
+}

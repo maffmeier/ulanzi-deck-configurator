@@ -91,22 +91,23 @@ type WidgetEngine struct {
 	renderer Renderer
 	log      *slog.Logger
 
-	mu       sync.Mutex
-	history  map[string][]float64
-	graphs   map[string]bool
-	commands map[string]*commandResult
-	timer    timerState
-	media    MediaInfo
-	mediaAt  time.Time
-	mediaRun bool
-	cover    image.Image
-	images   map[string]cachedImage
-	homes    map[string]*polled[HomeState]
-	obs      polled[OBSInfo]
-	audio    map[string]*polled[AudioInfo]
-	meeting  map[string]*polled[MeetingInfo]
-	mqtt     map[string]*polled[mqttReading]
-	lang     string
+	mu        sync.Mutex
+	history   map[string][]float64
+	graphs    map[string]bool
+	commands  map[string]*commandResult
+	timer     timerState
+	media     MediaInfo
+	mediaAt   time.Time
+	mediaRun  bool
+	cover     image.Image
+	images    map[string]cachedImage
+	homes     map[string]*polled[HomeState]
+	obs       polled[OBSInfo]
+	audio     map[string]*polled[AudioInfo]
+	meeting   map[string]*polled[MeetingInfo]
+	mqtt      map[string]*polled[mqttReading]
+	calendars map[string]*polled[[]CalendarEvent]
+	lang      string
 }
 
 // SetLanguage selects the language of texts drawn by widgets.
@@ -125,19 +126,20 @@ func (e *WidgetEngine) text(key string) string {
 
 func NewWidgetEngine(metrics Metrics, sources WidgetSources, renderer Renderer, log *slog.Logger) *WidgetEngine {
 	return &WidgetEngine{
-		metrics:  metrics,
-		sources:  sources,
-		renderer: renderer,
-		log:      log,
-		history:  map[string][]float64{},
-		graphs:   map[string]bool{},
-		commands: map[string]*commandResult{},
-		images:   map[string]cachedImage{},
-		homes:    map[string]*polled[HomeState]{},
-		audio:    map[string]*polled[AudioInfo]{},
-		meeting:  map[string]*polled[MeetingInfo]{},
-		mqtt:     map[string]*polled[mqttReading]{},
-		timer:    timerState{duration: defaultTimerMins * time.Minute, remaining: defaultTimerMins * time.Minute},
+		metrics:   metrics,
+		sources:   sources,
+		renderer:  renderer,
+		log:       log,
+		history:   map[string][]float64{},
+		graphs:    map[string]bool{},
+		commands:  map[string]*commandResult{},
+		images:    map[string]cachedImage{},
+		homes:     map[string]*polled[HomeState]{},
+		audio:     map[string]*polled[AudioInfo]{},
+		meeting:   map[string]*polled[MeetingInfo]{},
+		mqtt:      map[string]*polled[mqttReading]{},
+		calendars: map[string]*polled[[]CalendarEvent]{},
+		timer:     timerState{duration: defaultTimerMins * time.Minute, remaining: defaultTimerMins * time.Minute},
 	}
 }
 
@@ -211,6 +213,8 @@ func (e *WidgetEngine) Render(wd deck.Widget, w, h int, bg string, now time.Time
 		return e.renderMeeting(wd, w, h, bg, now)
 	case deck.WidgetMQTT:
 		return e.renderMQTT(wd, w, h, bg, now)
+	case deck.WidgetCalendar:
+		return e.renderCalendar(wd, w, h, bg, now)
 	}
 	return e.renderer.Text(w, h, bg, "", []string{"?"}, false)
 }

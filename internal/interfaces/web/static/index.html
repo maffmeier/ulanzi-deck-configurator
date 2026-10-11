@@ -870,9 +870,9 @@
       <label class="field grow"><span x-text="t('field.app')"></span>
         <input type="text" x-model="w.target" @input="markDirty()" :placeholder="t('field.appHint')" /></label>
     </template>
-    <template x-if="w.type === 'command' || w.type === 'image' || w.type === 'home_assistant'">
+    <template x-if="w.type === 'command' || w.type === 'image' || w.type === 'home_assistant' || w.type === 'calendar'">
       <label class="field"><span x-text="t(w.type === 'image' ? 'field.slideEvery' : 'field.refreshEvery')"></span>
-        <input type="number" min="0.5" step="0.5" x-model.number="w.interval_s" @input="markDirty()" /></label>
+        <input type="number" :min="w.type === 'calendar' ? 60 : 0.5" :step="w.type === 'calendar' ? 60 : 0.5" x-model.number="w.interval_s" @input="markDirty()" /></label>
     </template>
   </div>
   <template x-if="w.type === 'metrics'">
@@ -886,6 +886,15 @@
   <template x-if="w.type === 'command'">
     <label class="field"><span x-text="t('field.commandOutput')"></span>
       <input type="text" class="mono" x-model="w.cmd" @input="markDirty()" placeholder="curl -s 'wttr.in/Berlin?format=3'" /></label>
+  </template>
+  <template x-if="w.type === 'calendar'">
+    <div class="row">
+      <label class="field grow"><span x-text="t('field.icsUrl')"></span>
+        <input type="text" class="mono" x-model="w.url" @input="markDirty()" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" /></label>
+      <label class="check"><input type="checkbox" :checked="!!w.ok_color" @change="w.ok_color = $event.target.checked ? '#A16207' : ''; markDirty()" />
+        <span x-text="t('field.soonColor')"></span></label>
+      <input type="color" x-show="w.ok_color" x-model="w.ok_color" @input="markDirty()" />
+    </div>
   </template>
   <template x-if="w.type === 'mqtt'">
     <div class="row">
@@ -931,6 +940,7 @@
   <template x-if="w.type === 'audio'"><p class="hint" x-text="t('widgetHint.audio')"></p></template>
   <template x-if="w.type === 'meeting'"><p class="hint" x-text="t('widgetHint.meeting')"></p></template>
   <template x-if="w.type === 'mqtt'"><p class="hint" x-text="t('widgetHint.mqtt')"></p></template>
+  <template x-if="w.type === 'calendar'"><p class="hint" x-text="t('widgetHint.calendar')"></p></template>
 </template>
 
 <datalist id="ha-services">

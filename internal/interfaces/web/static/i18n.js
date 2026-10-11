@@ -477,6 +477,13 @@ window.I18N = {
         "day.fri": "Fr",
         "day.sat": "Sa",
         "day.sun": "So",
+
+        "widget.calendar": "Nächster Termin",
+        "field.icsUrl": "Kalender (ICS-Adresse oder Datei)",
+        "field.soonColor": "Eigene Farbe kurz vorher",
+        "widgetHint.calendar": "Zeigt den laufenden oder nächsten Termin mit Countdown; 15 Minuten vorher färbt sich die Taste. Bei Google: Einstellungen → Kalender → „Privatadresse im iCal-Format“; bei Outlook: Kalender veröffentlichen → ICS-Link. Die Adresse ist geheim und steht in der deck.yaml.",
+        "preset.liveCalendar": "Nächster Termin",
+        "preset.liveCalendarHint": "Zeigt den nächsten Termin aus einem ICS-Kalender",
     },
 
     en: {
@@ -954,6 +961,13 @@ window.I18N = {
         "day.fri": "Fri",
         "day.sat": "Sat",
         "day.sun": "Sun",
+
+        "widget.calendar": "Next event",
+        "field.icsUrl": "Calendar (ICS address or file)",
+        "field.soonColor": "Own color shortly before",
+        "widgetHint.calendar": "Shows the current or next event with a countdown; the key changes color 15 minutes before. Google: Settings → calendar → “Secret address in iCal format”; Outlook: publish the calendar → ICS link. The address is secret and is stored in deck.yaml.",
+        "preset.liveCalendar": "Next event",
+        "preset.liveCalendarHint": "Shows the next event from an ICS calendar",
     },
 };
 

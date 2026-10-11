@@ -4,7 +4,11 @@ go 1.26.0
 
 require (
 	fyne.io/systray v1.12.2
+	github.com/apognu/gocal v0.9.1
+	github.com/coder/websocket v1.8.15
+	github.com/ebitengine/purego v0.11.1
 	github.com/fogleman/gg v1.3.0
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
@@ -15,10 +19,8 @@ require (
 )
 
 require (
-	github.com/coder/websocket v1.8.15 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/ChannelMeter/iso8601duration v0.0.0-20150204201828-8da3af7a2a61 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect

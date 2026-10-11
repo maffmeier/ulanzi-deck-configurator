@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"image"
+	"time"
 
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/application"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/audio"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/calendar"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/media"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 )
@@ -22,6 +24,15 @@ func (s widgetSources) HomeAssistantState(entityID string) (application.HomeStat
 }
 
 func (s widgetSources) OBSStatus() (application.OBSInfo, error) { return s.integrations.obsStatus() }
+
+func (widgetSources) CalendarEvents(url string) ([]application.CalendarEvent, error) {
+	events, err := calendar.Fetch(url, time.Now())
+	out := make([]application.CalendarEvent, 0, len(events))
+	for _, e := range events {
+		out = append(out, application.CalendarEvent{Summary: e.Summary, Start: e.Start, End: e.End, AllDay: e.AllDay})
+	}
+	return out, err
+}
 
 func (s widgetSources) MQTTValue(topic string) (string, bool, error) {
 	return s.integrations.mqtt.Value(topic)

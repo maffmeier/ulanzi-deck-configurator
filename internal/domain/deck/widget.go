@@ -9,19 +9,23 @@ import (
 type WidgetType string
 
 const (
-	WidgetClock   WidgetType = "clock"
-	WidgetMetrics WidgetType = "metrics"
-	WidgetCommand WidgetType = "command"
-	WidgetGraph   WidgetType = "graph"
-	WidgetImage   WidgetType = "image"
-	WidgetTimer   WidgetType = "timer"
-	WidgetMedia   WidgetType = "media"
-	WidgetHome    WidgetType = "home_assistant"
-	WidgetOBS     WidgetType = "obs"
-	WidgetAudio   WidgetType = "audio"
-	WidgetMeeting WidgetType = "meeting"
-	WidgetMQTT    WidgetType = "mqtt"
+	WidgetClock    WidgetType = "clock"
+	WidgetMetrics  WidgetType = "metrics"
+	WidgetCommand  WidgetType = "command"
+	WidgetGraph    WidgetType = "graph"
+	WidgetImage    WidgetType = "image"
+	WidgetTimer    WidgetType = "timer"
+	WidgetMedia    WidgetType = "media"
+	WidgetHome     WidgetType = "home_assistant"
+	WidgetOBS      WidgetType = "obs"
+	WidgetAudio    WidgetType = "audio"
+	WidgetMeeting  WidgetType = "meeting"
+	WidgetMQTT     WidgetType = "mqtt"
+	WidgetCalendar WidgetType = "calendar"
 )
+
+// DefaultCalendarInterval is how often a calendar feed is fetched.
+const DefaultCalendarInterval = 300.0
 
 // MeetingShows are the Teams states a meeting widget can display.
 var MeetingShows = []string{"mute", "camera", "hand"}
@@ -142,6 +146,19 @@ func (w *Widget) Normalize(onKey bool) error {
 		if err := normalizeColors(w); err != nil {
 			return err
 		}
+	case WidgetCalendar:
+		if strings.TrimSpace(w.URL) == "" {
+			return fmt.Errorf("calendar widget needs the url of an ICS feed")
+		}
+		if w.IntervalS == 0 {
+			w.IntervalS = DefaultCalendarInterval
+		}
+		if w.IntervalS < 60 {
+			return fmt.Errorf("calendar feeds are fetched at most once a minute")
+		}
+		if err := normalizeColors(w); err != nil {
+			return err
+		}
 	case WidgetMQTT:
 		if err := ValidateMQTTTopic(w.Topic); err != nil {
 			return err
@@ -197,6 +214,8 @@ func (w Widget) Clean() Widget {
 		clean.Title, clean.Show = w.Title, w.Show
 	case WidgetMeeting:
 		clean.Title, clean.Show = w.Title, w.Show
+	case WidgetCalendar:
+		clean.Title, clean.URL, clean.IntervalS, clean.OkColor = w.Title, w.URL, w.IntervalS, w.OkColor
 	case WidgetMQTT:
 		clean.Title, clean.Topic, clean.Attribute, clean.ActiveState = w.Title, w.Topic, w.Attribute, w.ActiveState
 		clean.OkColor, clean.FailColor = w.OkColor, w.FailColor
