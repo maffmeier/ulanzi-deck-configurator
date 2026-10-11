@@ -422,3 +422,10 @@ textarea { background: #15171b; border: 1px solid var(--line); border-radius: 7p
 input[type=time], input[type=password] {
   background: #15171b; border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; color: inherit; font: inherit;
 }
+
+/* Versions */
+.versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 60vh; overflow: auto; }
+.versions li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: var(--panel-2); }
+.versions li span:first-child { flex: 1; font-variant-numeric: tabular-nums; }
+.versions small { opacity: .6; }
+.badge-current { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(60,207,145,.18); color: var(--ok); }

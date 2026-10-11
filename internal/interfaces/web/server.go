@@ -62,6 +62,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", s.getConfig)
 	mux.HandleFunc("PUT /api/config", s.putConfig)
 	mux.HandleFunc("POST /api/config/validate", s.validateConfig)
+	mux.HandleFunc("GET /api/backups", s.listBackups)
+	mux.HandleFunc("POST /api/backups/{name}/restore", s.restoreBackup)
 	mux.HandleFunc("GET /api/small-window/preview", s.smallWindowPreview)
 	mux.HandleFunc("GET /api/temperature-sensors", s.temperatureSensors)
 	mux.HandleFunc("GET /api/predefined", s.predefined)
@@ -247,16 +249,13 @@ func (s *Server) putEditor(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// save writes a timestamped snapshot (and optionally the upload ZIP of the
-// default page) before atomically replacing the config. The daemon's file
-// watcher picks the change up within a second.
+// save keeps a version in the backup directory (and optionally the upload
+// ZIP of the default page) before atomically replacing the config. The
+// daemon's file watcher picks the change up within a second.
 func (s *Server) save(text []byte, cfg *deck.Config, withBundle bool) (string, string, error) {
 	now := time.Now()
-	versioned := configfile.VersionedPath(s.ConfigPath, "", "", now)
-	if err := os.MkdirAll(s.configDir(), 0o755); err != nil {
-		return "", "", err
-	}
-	if err := os.WriteFile(versioned, text, 0o644); err != nil {
+	versioned, err := configfile.WriteBackup(s.ConfigPath, text, now)
+	if err != nil {
 		return "", "", err
 	}
 	var bundle string
@@ -266,7 +265,7 @@ func (s *Server) save(text []byte, cfg *deck.Config, withBundle bool) (string, s
 			os.Remove(versioned)
 			return "", "", err
 		}
-		bundle = configfile.VersionedPath(s.ConfigPath, "firmware", ".zip", now)
+		bundle = configfile.VersionedPath(filepath.Join(configfile.BackupDir(s.ConfigPath), filepath.Base(s.ConfigPath)), "firmware", ".zip", now)
 		if err := os.WriteFile(bundle, blob, 0o644); err != nil {
 			os.Remove(versioned)
 			return "", "", err
@@ -339,6 +338,48 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 	summary.VersionedConfigPath = strPtr(versioned)
 	summary.SavedFirmwareBundlePath = strPtr(bundle)
 	writeJSON(w, http.StatusOK, summary)
+}
+
+func (s *Server) listBackups(w http.ResponseWriter, _ *http.Request) {
+	backups, err := configfile.ListBackups(s.ConfigPath)
+	if err != nil {
+		writeDetail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	current, _ := os.ReadFile(s.ConfigPath)
+	items := []map[string]any{}
+	for _, b := range backups {
+		item := map[string]any{"name": b.Name, "saved": b.Saved.Format(time.RFC3339), "size": b.Size}
+		if data, err := configfile.ReadBackup(s.ConfigPath, b.Name); err == nil && string(data) == string(current) {
+			item["current"] = true
+		}
+		items = append(items, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// restoreBackup saves an old version as the current config, so restoring is
+// itself a new version and can be undone the same way.
+func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
+	text, err := configfile.ReadBackup(s.ConfigPath, r.PathValue("name"))
+	if errors.Is(err, configfile.ErrBackupNotFound) {
+		writeDetail(w, http.StatusNotFound, "backup not found")
+		return
+	}
+	if err != nil {
+		writeDetail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	cfg, err := s.parseYAML(text)
+	if err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, failedSummary(err))
+		return
+	}
+	if _, _, err := s.save(text, cfg, false); err != nil {
+		writeDetail(w, http.StatusInternalServerError, "write failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, toEditorConfig(cfg, s.ConfigPath, true))
 }
 
 func (s *Server) smallWindowPreview(w http.ResponseWriter, r *http.Request) {

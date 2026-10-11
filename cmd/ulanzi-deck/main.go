@@ -225,6 +225,9 @@ func runCommand(args []string) error {
 	}
 
 	created := ensureConfig(configPath, log)
+	if moved, err := configfile.MigrateSnapshots(configPath); moved > 0 || err != nil {
+		log.Info("moved saved versions into the backup directory", "count", moved, "error", err)
+	}
 	cfg, err := configfile.Load(configPath)
 	if err != nil {
 		log.Error("config invalid, starting with an empty layout until it is fixed", "path", configPath, "error", err)

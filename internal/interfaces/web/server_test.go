@@ -111,9 +111,8 @@ func TestEditorRoundTrip(t *testing.T) {
 	if main.Buttons[0].TextStyle.TextColor != "#FFFFFF" {
 		t.Fatal("colors must be normalized")
 	}
-	snapshots, _ := filepath.Glob(filepath.Join(filepath.Dir(s.ConfigPath), "deck-*.yaml"))
-	if len(snapshots) != 1 {
-		t.Fatalf("expected one snapshot, got %v", snapshots)
+	if backups, _ := configfile.ListBackups(s.ConfigPath); len(backups) != 1 {
+		t.Fatalf("expected one backup, got %v", backups)
 	}
 }
 
@@ -189,5 +188,45 @@ func TestSecretsAreWriteOnly(t *testing.T) {
 	do(t, h, "PUT", "/api/secrets", map[string]any{"home_assistant_url": "http://ha2:8123"})
 	if got := s.Secrets.Get().HomeAssistant; got.Token != "geheim" || got.URL != "http://ha2:8123" {
 		t.Fatalf("stored %+v", got)
+	}
+}
+
+func TestBackupsListAndRestore(t *testing.T) {
+	s, h := newTestServer(t)
+	first := "default_page: main\npages:\n  main:\n    buttons:\n      - {index: 0, label: Eins}\n"
+	second := strings.Replace(first, "Eins", "Zwei", 1)
+	for _, text := range []string{first, second} {
+		if rec := do(t, h, "PUT", "/api/config", map[string]any{"content": text}); rec.Code != 200 {
+			t.Fatalf("save: %d %s", rec.Code, rec.Body)
+		}
+	}
+	entries, _ := os.ReadDir(filepath.Dir(s.ConfigPath))
+	for _, e := range entries {
+		if e.Name() != "deck.yaml" && e.Name() != "backups" {
+			t.Fatalf("stray file next to the config: %s", e.Name())
+		}
+	}
+
+	var list struct {
+		Items []struct {
+			Name    string `json:"name"`
+			Current bool   `json:"current"`
+		} `json:"items"`
+	}
+	_ = json.Unmarshal(do(t, h, "GET", "/api/backups", nil).Body.Bytes(), &list)
+	if len(list.Items) != 2 || !list.Items[0].Current || list.Items[1].Current {
+		t.Fatalf("backups %+v", list.Items)
+	}
+
+	rec := do(t, h, "POST", "/api/backups/"+list.Items[1].Name+"/restore", nil)
+	if rec.Code != 200 {
+		t.Fatalf("restore: %d %s", rec.Code, rec.Body)
+	}
+	data, _ := os.ReadFile(s.ConfigPath)
+	if !strings.Contains(string(data), "Eins") {
+		t.Fatalf("config after restore:\n%s", data)
+	}
+	if rec := do(t, h, "POST", "/api/backups/secrets.yaml/restore", nil); rec.Code != 404 {
+		t.Fatalf("foreign name: %d", rec.Code)
 	}
 }

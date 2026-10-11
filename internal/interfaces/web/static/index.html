@@ -65,6 +65,9 @@
       <i></i><span x-text="t(health.deck_connected ? 'top.connected' : 'top.disconnected')"></span>
     </span>
     <button class="icon-btn lang" @click="setLang(lang === 'de' ? 'en' : 'de')" :title="t('top.language')" x-text="lang === 'de' ? 'EN' : 'DE'"></button>
+    <button class="icon-btn" @click="undo()" :disabled="!history.past.length && !dirty" :title="t('top.undo')">↶</button>
+    <button class="icon-btn" @click="redo()" :disabled="!history.future.length" :title="t('top.redo')">↷</button>
+    <button class="icon-btn" @click="openVersions()" :title="t('versions.title')">🕘</button>
     <button class="icon-btn" @click="openSettings('general')" :title="t('settings.title')">⚙</button>
     <button class="ghost" @click="reload()" :disabled="busy || !dirty" :title="t('top.discardHint')" x-text="t('top.discard')"></button>
     <button class="primary" @click="save()" :disabled="busy || !dirty" x-text="t(dirty ? 'top.save' : 'top.saved')"></button>
@@ -528,6 +531,27 @@
       </template>
     </div>
     </template>
+  </div>
+</div>
+
+<!-- ───────────── Versions ───────────── -->
+<div class="modal" x-show="versions.open" x-cloak x-transition.opacity @keydown.escape.window="versions.open = false">
+  <div class="modal-box small" @click.outside="versions.open = false">
+    <header><h3 x-text="t('versions.title')"></h3><button class="icon-btn" @click="versions.open = false">✕</button></header>
+    <div class="modal-body">
+      <p class="hint" x-text="t('versions.hint')"></p>
+      <p class="hint" x-show="!versions.items.length" x-text="t('versions.empty')"></p>
+      <ul class="versions">
+        <template x-for="item in versions.items" :key="item.name">
+          <li>
+            <span x-text="versionTime(item)"></span>
+            <small x-text="(item.size / 1024).toFixed(1) + ' KB'"></small>
+            <span class="badge-current" x-show="item.current" x-text="t('versions.current')"></span>
+            <button x-show="!item.current" @click="restoreVersion(item)" x-text="t('versions.restore')"></button>
+          </li>
+        </template>
+      </ul>
+    </div>
   </div>
 </div>
 

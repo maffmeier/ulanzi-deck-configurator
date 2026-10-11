@@ -205,6 +205,10 @@ window.deckApp = function deckApp() {
         settings: { open: false, tab: "general" },
         secrets: {},
         secretsTest: {},
+        // Undo history as JSON snapshots of the editor state.
+        history: { past: [], future: [], last: "", saved: "" },
+        historyTimer: null,
+        versions: { open: false, items: [] },
 
         get shellPlaceholder() {
             if (navigator.platform.startsWith("Win")) return "start notepad";
@@ -253,7 +257,7 @@ window.deckApp = function deckApp() {
                     this.currentPage = this.editor.default_page;
                 }
                 this.selected = null;
-                this.dirty = false;
+                this.resetHistory();
             } catch (err) {
                 this.toast(err.message, "err");
             } finally {
@@ -361,6 +365,7 @@ window.deckApp = function deckApp() {
                 if (!res.ok) throw new Error(payload.error || payload.detail || this.t("msg.saveFailed"));
                 const selected = this.selected;
                 this.editor = this.normalizeEditor(payload);
+                this.history.last = this.history.saved = JSON.stringify(this.editor);
                 this.dirty = false;
                 this.selected = selected;
                 this.toast(this.t(this.health.deck_connected ? "msg.savedLive" : "msg.saved"), "ok");
@@ -373,6 +378,82 @@ window.deckApp = function deckApp() {
 
         markDirty() {
             this.dirty = true;
+            clearTimeout(this.historyTimer);
+            this.historyTimer = setTimeout(() => this.recordHistory(), 400);
+        },
+
+        // ───────────── Undo & versions ─────────────
+
+        resetHistory() {
+            clearTimeout(this.historyTimer);
+            const state = JSON.stringify(this.editor);
+            this.history = { past: [], future: [], last: state, saved: state };
+            this.dirty = false;
+        },
+
+        recordHistory() {
+            clearTimeout(this.historyTimer);
+            const state = JSON.stringify(this.editor);
+            if (state === this.history.last) return;
+            this.history.past = [...this.history.past, this.history.last].slice(-100);
+            this.history.future = [];
+            this.history.last = state;
+            this.dirty = state !== this.history.saved;
+        },
+
+        restoreState(state) {
+            this.history.last = state;
+            this.editor = JSON.parse(state);
+            if (!this.editor.pages.some((p) => p.name === this.currentPage)) this.currentPage = this.editor.default_page;
+            this.dirty = state !== this.history.saved;
+        },
+
+        undo() {
+            this.recordHistory();
+            const past = [...this.history.past];
+            if (!past.length) return;
+            this.history.future = [...this.history.future, this.history.last];
+            this.restoreState(past.pop());
+            this.history.past = past;
+        },
+
+        redo() {
+            const future = [...this.history.future];
+            if (!future.length) return;
+            this.history.past = [...this.history.past, this.history.last];
+            this.restoreState(future.pop());
+            this.history.future = future;
+        },
+
+        async openVersions() {
+            this.versions = { open: true, items: [] };
+            try {
+                const res = await fetch("/api/backups");
+                this.versions.items = (await res.json()).items || [];
+            } catch (_err) {
+                this.toast(this.t("versions.failed"), "err");
+            }
+        },
+
+        versionTime(item) {
+            return new Date(item.saved).toLocaleString(this.lang === "de" ? "de-DE" : "en-GB");
+        },
+
+        async restoreVersion(item) {
+            if (this.dirty && !confirm(this.t("msg.discardConfirm"))) return;
+            try {
+                const res = await fetch(`/api/backups/${encodeURIComponent(item.name)}/restore`, { method: "POST" });
+                const payload = await res.json();
+                if (!res.ok) throw new Error(payload.error || payload.detail || this.t("msg.saveFailed"));
+                this.editor = this.normalizeEditor(payload);
+                if (!this.editor.pages.some((p) => p.name === this.currentPage)) this.currentPage = this.editor.default_page;
+                this.selected = null;
+                this.resetHistory();
+                this.versions.open = false;
+                this.toast(this.t("versions.restored", { time: this.versionTime(item) }), "ok");
+            } catch (err) {
+                this.toast(err.message, "err", 8000);
+            }
         },
 
         // ───────────── Actions ─────────────
@@ -776,9 +857,16 @@ window.deckApp = function deckApp() {
                 return;
             }
             const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName);
-            if ((event.ctrlKey || event.metaKey) && event.key === "s") {
+            const mod = event.ctrlKey || event.metaKey;
+            if (mod && event.key === "s") {
                 event.preventDefault();
                 if (this.dirty) this.save();
+            } else if (!typing && mod && (event.key === "y" || (event.key.toLowerCase() === "z" && event.shiftKey))) {
+                event.preventDefault();
+                this.redo();
+            } else if (!typing && mod && event.key === "z") {
+                event.preventDefault();
+                this.undo();
             } else if (!typing && (event.key === "Delete" || event.key === "Backspace") && this.selected !== null) {
                 event.preventDefault();
                 this.clearSelected();

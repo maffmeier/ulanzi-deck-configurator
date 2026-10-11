@@ -331,6 +331,16 @@ window.I18N = {
         "common.apply": "Übernehmen",
         "common.close": "Schließen",
         "common.minutes": "{n} min",
+
+        "top.undo": "Rückgängig (Strg+Z)",
+        "top.redo": "Wiederholen (Strg+Umschalt+Z)",
+        "versions.title": "Gespeicherte Versionen",
+        "versions.hint": "Jedes Speichern legt eine Version an; die letzten 50 bleiben erhalten. Wiederherstellen speichert die alte Version als neue.",
+        "versions.empty": "Noch keine gespeicherten Versionen.",
+        "versions.current": "aktuell",
+        "versions.restore": "Wiederherstellen",
+        "versions.restored": "Version vom {time} wiederhergestellt",
+        "versions.failed": "Versionen konnten nicht geladen werden",
     },
 
     en: {
@@ -662,6 +672,16 @@ window.I18N = {
         "common.apply": "Apply",
         "common.close": "Close",
         "common.minutes": "{n} min",
+
+        "top.undo": "Undo (Ctrl+Z)",
+        "top.redo": "Redo (Ctrl+Shift+Z)",
+        "versions.title": "Saved versions",
+        "versions.hint": "Every save creates a version; the last 50 are kept. Restoring saves the old version as a new one.",
+        "versions.empty": "No saved versions yet.",
+        "versions.current": "current",
+        "versions.restore": "Restore",
+        "versions.restored": "Restored the version from {time}",
+        "versions.failed": "Could not load versions",
     },
 };
 
