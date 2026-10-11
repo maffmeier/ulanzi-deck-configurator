@@ -46,12 +46,7 @@ func (d *Daemon) flipToggle(page string, index int) {
 	if b == nil {
 		return
 	}
-	shown := d.effectiveLocked(*b)
-	if shown.Live != nil {
-		shown.IconData = d.engine.Render(*shown.Live, deck.IconSize, deck.IconSize, shown.TextStyle.BackgroundColor, time.Now())
-		d.liveHash[index] = pngHash(shown.IconData)
-	}
-	d.logErr("upload toggle key", d.dev.SetButtons([]deck.Button{shown}, true))
+	d.logErr("upload toggle key", d.dev.SetButtons([]deck.Button{d.shownLocked(*b)}, true))
 }
 
 // runMulti executes the steps in order in the background, so delays never

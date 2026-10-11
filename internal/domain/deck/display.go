@@ -15,6 +15,8 @@ type Display struct {
 	// OffWhenLocked turns the display off while the computer is locked.
 	OffWhenLocked bool
 	Night         *NightMode
+	// PressFeedback briefly shows a pressed key darker and smaller.
+	PressFeedback bool
 }
 
 // NightMode lowers the brightness between From and To ("HH:MM", may wrap

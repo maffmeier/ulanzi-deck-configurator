@@ -105,6 +105,7 @@ type rawDisplay struct {
 	DimAfterS     int  `yaml:"dim_after_s"`
 	DimBrightness int  `yaml:"dim_brightness"`
 	OffWhenLocked bool `yaml:"off_when_locked"`
+	PressFeedback bool `yaml:"press_feedback"`
 	Night         *struct {
 		From       string `yaml:"from"`
 		To         string `yaml:"to"`
@@ -144,7 +145,7 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 		cfg.Brightness = *raw.Brightness
 	}
 	if d := raw.Display; d != nil {
-		cfg.Display = deck.Display{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked}
+		cfg.Display = deck.Display{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked, PressFeedback: d.PressFeedback}
 		if d.Night != nil {
 			cfg.Display.Night = &deck.NightMode{From: d.Night.From, To: d.Night.To, Brightness: d.Night.Brightness}
 		}

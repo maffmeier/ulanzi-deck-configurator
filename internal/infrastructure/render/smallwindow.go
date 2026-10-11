@@ -60,6 +60,7 @@ func SmallWindowMetricsPNG(bg string, lines []string) []byte {
 type Renderer struct{}
 
 func (Renderer) SmallWindowClock(bg, text string) []byte { return SmallWindowClockPNG(bg, text) }
+func (Renderer) Pressed(b deck.Button) []byte            { return PressedIcon(b) }
 func (Renderer) SmallWindowMetrics(bg string, lines []string) []byte {
 	return SmallWindowMetricsPNG(bg, lines)
 }

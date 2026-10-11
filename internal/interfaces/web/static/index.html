@@ -505,6 +505,8 @@
             <label class="field"><span x-text="t('display.nightBrightness')"></span>
               <input type="number" min="0" max="100" x-model.number="editor.display.night_brightness" @input="markDirty()" /></label>
           </div>
+          <label class="check"><input type="checkbox" x-model="editor.display.press_feedback" @change="markDirty()" /> <span x-text="t('display.pressFeedback')"></span></label>
+          <p class="hint" x-text="t('display.pressFeedbackHint')"></p>
           <p class="hint" x-text="t('display.saveHint')"></p>
         </div>
       </template>

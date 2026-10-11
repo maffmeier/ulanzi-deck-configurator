@@ -54,6 +54,7 @@ func (d *Daemon) onPress(index int) {
 
 	key := &heldKey{button: *button, page: page}
 	d.log.Info("button pressed", "index", index, "page", page, "press", button.Press)
+	d.showPressed(index, page)
 
 	switch {
 	case button.Press == deck.PressHold:
@@ -82,6 +83,50 @@ func (d *Daemon) onPress(index int) {
 
 func (d *Daemon) onRelease(index int) {
 	d.endHold(index, true)
+	d.restorePressed(index)
+}
+
+// showPressed draws a key in its pressed look when the config asks for it.
+func (d *Daemon) showPressed(index int, page string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.cfg.Display.PressFeedback || index >= deck.ButtonCount || page != d.page {
+		return
+	}
+	b := d.cfg.ButtonAt(page, index)
+	if b == nil {
+		return
+	}
+	shown := d.shownLocked(*b)
+	pressed := deck.Button{Index: index, IconData: d.renderer.Pressed(shown), TextStyle: shown.TextStyle}
+	d.pressedShown[index] = page
+	d.logErr("upload pressed key", d.dev.SetButtons([]deck.Button{pressed}, true))
+}
+
+// restorePressed redraws a key after its pressed look, unless a page switch
+// has already replaced it.
+func (d *Daemon) restorePressed(index int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	page, ok := d.pressedShown[index]
+	delete(d.pressedShown, index)
+	if !ok || page != d.page {
+		return
+	}
+	if b := d.cfg.ButtonAt(page, index); b != nil {
+		d.logErr("upload released key", d.dev.SetButtons([]deck.Button{d.shownLocked(*b)}, true))
+	}
+}
+
+// shownLocked is the key as the deck shows it: toggle state and live
+// content applied.
+func (d *Daemon) shownLocked(b deck.Button) deck.Button {
+	shown := d.effectiveLocked(b)
+	if shown.Live != nil {
+		shown.IconData = d.engine.Render(*shown.Live, deck.IconSize, deck.IconSize, shown.TextStyle.BackgroundColor, time.Now())
+		d.liveHash[shown.Index] = pngHash(shown.IconData)
+	}
+	return shown
 }
 
 // endHold finishes a held key; fireShort runs the short-press action of a

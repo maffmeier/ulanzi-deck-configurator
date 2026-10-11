@@ -2,6 +2,7 @@
 package web
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -493,13 +494,13 @@ func (s *Server) temperatureSensors(w http.ResponseWriter, _ *http.Request) {
 
 var unsafeFilename = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
-func allocatePath(dir, stem string) string {
-	candidate := filepath.Join(dir, stem+".png")
+func allocatePath(dir, stem, ext string) string {
+	candidate := filepath.Join(dir, stem+ext)
 	for i := 1; ; i++ {
 		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
 			return candidate
 		}
-		candidate = filepath.Join(dir, stem+"-"+strconv.Itoa(i)+".png")
+		candidate = filepath.Join(dir, stem+"-"+strconv.Itoa(i)+ext)
 	}
 }
 
@@ -511,10 +512,19 @@ func (s *Server) uploadAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	pngData, err := render.NormalizeUpload(file)
+	raw, err := io.ReadAll(file)
 	if err != nil {
-		writeDetail(w, http.StatusUnprocessableEntity, "invalid image upload: "+err.Error())
+		writeDetail(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// Animated GIFs are kept as they are; the deck plays them.
+	pngData, ext := raw, ".gif"
+	if !render.IsAnimatedGIF(raw) {
+		ext = ".png"
+		if pngData, err = render.NormalizeUpload(bytes.NewReader(raw)); err != nil {
+			writeDetail(w, http.StatusUnprocessableEntity, "invalid image upload: "+err.Error())
+			return
+		}
 	}
 	stem := strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename))
 	stem = strings.Trim(unsafeFilename.ReplaceAllString(stem, "-"), ".-")
@@ -526,7 +536,7 @@ func (s *Server) uploadAsset(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	target := allocatePath(dir, stem)
+	target := allocatePath(dir, stem, ext)
 	if err := os.WriteFile(target, pngData, 0o644); err != nil {
 		writeDetail(w, http.StatusInternalServerError, err.Error())
 		return

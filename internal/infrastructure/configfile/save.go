@@ -95,6 +95,7 @@ type outDisplay struct {
 	DimAfterS     int       `yaml:"dim_after_s,omitempty"`
 	DimBrightness int       `yaml:"dim_brightness,omitempty"`
 	OffWhenLocked bool      `yaml:"off_when_locked,omitempty"`
+	PressFeedback bool      `yaml:"press_feedback,omitempty"`
 	Night         *outNight `yaml:"night,omitempty"`
 }
 
@@ -139,8 +140,8 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 		},
 		Pages: yaml.Node{Kind: yaml.MappingNode},
 	}
-	if d := cfg.Display; d.DimAfterS > 0 || d.OffWhenLocked || d.Night != nil {
-		out.Display = &outDisplay{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked}
+	if d := cfg.Display; d.DimAfterS > 0 || d.OffWhenLocked || d.Night != nil || d.PressFeedback {
+		out.Display = &outDisplay{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked, PressFeedback: d.PressFeedback}
 		if n := d.Night; n != nil {
 			out.Display.Night = &outNight{From: n.From, To: n.To, Brightness: n.Brightness}
 		}

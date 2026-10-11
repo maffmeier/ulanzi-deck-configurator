@@ -168,6 +168,7 @@ func (fakeRenderer) Media(_, _ int, _, title, artist string, _ image.Image) []by
 }
 func (fakeRenderer) Image(int, int, string, image.Image) []byte { return []byte("image") }
 func (fakeRenderer) SmallWindowMetrics(string, []string) []byte { return []byte("png") }
+func (fakeRenderer) Pressed(b deck.Button) []byte               { return []byte("pressed:" + b.Label) }
 
 func pagedConfig() *deck.Config {
 	next := &deck.Action{Type: deck.ActionSwitchPage, Page: deck.PageNext}
@@ -356,4 +357,35 @@ func TestDisconnectReleasesHeldKeys(t *testing.T) {
 	eventually(t, func() bool { runner.mu.Lock(); defer runner.mu.Unlock(); return len(runner.pressed) == 1 })
 	dev.events <- deck.ConnectionEvent{Connected: false}
 	eventually(t, func() bool { runner.mu.Lock(); defer runner.mu.Unlock(); return len(runner.released) == 1 })
+}
+
+func TestPressFeedbackShowsAndRestoresKey(t *testing.T) {
+	cfg := pagedConfig()
+	cfg.Display.PressFeedback = true
+	cfg.Pages[0].Buttons[1].Label = "cmd"
+	_, dev, runner := startDaemon(t, cfg)
+	eventually(t, func() bool { return dev.lastUploadLabel(0) == "first" })
+
+	press(dev, 1)
+	eventually(t, func() bool { return len(runner.commands()) == 1 })
+	eventually(t, func() bool {
+		data := dev.partialData(1)
+		labels := dev.partialLabels(1)
+		return len(data) > 0 && data[0] == "pressed:cmd" && labels[len(labels)-1] == "cmd"
+	})
+}
+
+func TestPressFeedbackSkipsKeysReplacedByPageSwitch(t *testing.T) {
+	cfg := pagedConfig()
+	cfg.Display.PressFeedback = true
+	d, dev, _ := startDaemon(t, cfg)
+	eventually(t, func() bool { return dev.lastUploadLabel(0) == "first" })
+
+	press(dev, 12)
+	eventually(t, func() bool { return d.CurrentPage() == "two" })
+	time.Sleep(50 * time.Millisecond)
+	labels := dev.partialLabels(12)
+	if len(labels) != 1 || dev.partialData(12)[0] != "pressed:next" {
+		t.Fatalf("partials for the page key: %v", labels)
+	}
 }

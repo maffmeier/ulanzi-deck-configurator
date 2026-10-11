@@ -50,6 +50,7 @@ type Renderer interface {
 	Timer(w, h int, bg, title, text string, progress float64, running bool) []byte
 	Media(w, h int, bg, title, artist string, cover image.Image) []byte
 	Image(w, h int, bg string, img image.Image) []byte
+	Pressed(b deck.Button) []byte
 }
 
 const heartbeatInterval = 2 * time.Second
@@ -93,6 +94,9 @@ type Daemon struct {
 	autoPage   string
 	autoReturn string
 	recentApps []string
+
+	// pressedShown maps keys drawn in their pressed look to their page.
+	pressedShown map[int]string
 }
 
 func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, engine *WidgetEngine, cfg *deck.Config, log *slog.Logger) *Daemon {
@@ -111,6 +115,8 @@ func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer
 		widgetKick: make(chan struct{}, 1),
 		timing:     defaultPressTiming,
 		held:       map[int]*heldKey{},
+
+		pressedShown: map[int]string{},
 	}
 }
 

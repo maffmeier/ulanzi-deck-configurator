@@ -50,7 +50,7 @@ window.I18N = {
 
         "key.title": "Taste {n}",
         "key.image": "Bild …",
-        "key.uploadHint": "Bild hochladen",
+        "key.uploadHint": "Bild hochladen (animierte GIFs laufen auf dem Deck)",
         "key.catalog": "Katalog …",
         "key.catalogHint": "Icon aus dem Katalog",
         "key.removeImage": "Bild entfernen",
@@ -357,6 +357,9 @@ window.I18N = {
         "profile.imported": "{n} Seite(n) importiert – zum Übernehmen speichern",
         "profile.importedDropped": "{n} Seite(n) importiert, {dropped} Taste(n) auf angehefteten Positionen ausgelassen – zum Übernehmen speichern",
         "profile.replaced": "Profil übernommen – zum Übernehmen speichern",
+
+        "display.pressFeedback": "Tastendruck sichtbar machen",
+        "display.pressFeedbackHint": "Eine gedrückte Taste wird kurz dunkler und kleiner dargestellt.",
     },
 
     en: {
@@ -407,7 +410,7 @@ window.I18N = {
 
         "key.title": "Key {n}",
         "key.image": "Image …",
-        "key.uploadHint": "Upload an image",
+        "key.uploadHint": "Upload an image (animated GIFs play on the deck)",
         "key.catalog": "Catalog …",
         "key.catalogHint": "Pick an icon from the catalog",
         "key.removeImage": "Remove image",
@@ -714,6 +717,9 @@ window.I18N = {
         "profile.imported": "Imported {n} page(s) – save to apply",
         "profile.importedDropped": "Imported {n} page(s), skipped {dropped} key(s) on pinned positions – save to apply",
         "profile.replaced": "Profile loaded – save to apply",
+
+        "display.pressFeedback": "Show key presses",
+        "display.pressFeedbackHint": "A pressed key is briefly shown darker and smaller.",
     },
 };
 

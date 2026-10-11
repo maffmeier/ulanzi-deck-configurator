@@ -279,7 +279,7 @@ window.deckApp = function deckApp() {
                 })),
                 display: {
                     dim_after_s: 0, dim_brightness: 10, off_when_locked: false, night_enabled: false,
-                    night_from: "22:00", night_to: "07:00", night_brightness: 20, ...(payload.display || {}),
+                    night_from: "22:00", night_to: "07:00", night_brightness: 20, press_feedback: false, ...(payload.display || {}),
                 },
                 fixed_buttons: (payload.fixed_buttons || []).map(normalizeButton),
                 small_window: {

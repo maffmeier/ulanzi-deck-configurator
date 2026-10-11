@@ -247,3 +247,23 @@ func textTile(text string, style deck.TextStyle, w, h, maxW, maxH int) []byte {
 	}
 	return encodePNG(dc.Image())
 }
+
+// PressedIcon is the key as shown while held: darker and slightly smaller,
+// like a physical key going down.
+func PressedIcon(b deck.Button) []byte {
+	data := b.IconData
+	if data == nil {
+		data = ButtonIcon(b)
+	}
+	src, err := DecodeImage(bytes.NewReader(data))
+	if err != nil {
+		return data
+	}
+	w, h := deck.IconSize, deck.IconSize
+	tile := solid(w, h, color.RGBA{A: 255})
+	shrunk := contain(src, w*86/100, h*86/100)
+	sb := shrunk.Bounds()
+	draw.Draw(tile, sb.Add(image.Pt((w-sb.Dx())/2, (h-sb.Dy())/2)), shrunk, image.Point{}, draw.Over)
+	draw.Draw(tile, tile.Bounds(), &image.Uniform{C: color.RGBA{A: 90}}, image.Point{}, draw.Over)
+	return encodePNG(tile)
+}

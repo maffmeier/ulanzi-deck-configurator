@@ -5,8 +5,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/color"
+	"image/color/palette"
+	"image/gif"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -221,4 +228,33 @@ func TestDeviceCachesStateAndRestoresOnReconnect(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+func TestAnimatedGIFIconIsUploadedAsGIF(t *testing.T) {
+	anim := &gif.GIF{}
+	for _, c := range []color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}} {
+		frame := image.NewPaletted(image.Rect(0, 0, 8, 8), palette.Plan9)
+		for i := range frame.Pix {
+			frame.Pix[i] = uint8(color.Palette(palette.Plan9).Index(c))
+		}
+		anim.Image = append(anim.Image, frame)
+		anim.Delay = append(anim.Delay, 20)
+	}
+	path := filepath.Join(t.TempDir(), "blink.gif")
+	f, _ := os.Create(path)
+	gif.EncodeAll(f, anim)
+	f.Close()
+
+	blob, err := BuildButtonsZip([]deck.Button{{Index: 2, IconPath: path, ResolvedIcon: path, TextStyle: deck.DefaultTextStyle()}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, _ := readZip(t, blob)
+	var manifest map[string]manifestEntry
+	_ = json.Unmarshal(files["manifest.json"], &manifest)
+	icon := manifest["2_0"].ViewParam[0].Icon
+	decoded, err := gif.DecodeAll(bytes.NewReader(files[icon]))
+	if !strings.HasSuffix(icon, ".gif") || err != nil || len(decoded.Image) != 2 {
+		t.Fatalf("icon %q: %v", icon, err)
+	}
 }

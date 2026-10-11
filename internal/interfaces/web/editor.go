@@ -97,6 +97,7 @@ type editorDisplay struct {
 	NightFrom     string `json:"night_from"`
 	NightTo       string `json:"night_to"`
 	NightBright   int    `json:"night_brightness"`
+	PressFeedback bool   `json:"press_feedback"`
 }
 
 type editorSmallWindow struct {
@@ -373,7 +374,7 @@ func cleanList(items []string) []string {
 
 func toEditorDisplay(d deck.Display) editorDisplay {
 	ed := editorDisplay{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked,
-		NightFrom: "22:00", NightTo: "07:00", NightBright: 20}
+		NightFrom: "22:00", NightTo: "07:00", NightBright: 20, PressFeedback: d.PressFeedback}
 	if n := d.Night; n != nil {
 		ed.NightEnabled, ed.NightFrom, ed.NightTo, ed.NightBright = true, n.From, n.To, n.Brightness
 	}
@@ -381,7 +382,7 @@ func toEditorDisplay(d deck.Display) editorDisplay {
 }
 
 func fromEditorDisplay(ed editorDisplay) deck.Display {
-	d := deck.Display{DimAfterS: ed.DimAfterS, DimBrightness: ed.DimBrightness, OffWhenLocked: ed.OffWhenLocked}
+	d := deck.Display{DimAfterS: ed.DimAfterS, DimBrightness: ed.DimBrightness, OffWhenLocked: ed.OffWhenLocked, PressFeedback: ed.PressFeedback}
 	if ed.NightEnabled {
 		d.Night = &deck.NightMode{From: ed.NightFrom, To: ed.NightTo, Brightness: ed.NightBright}
 	}

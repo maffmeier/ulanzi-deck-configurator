@@ -59,8 +59,14 @@ func BuildButtonsZip(buttons []deck.Button, fillMissing bool) ([]byte, error) {
 	for _, b := range buttons {
 		var vp viewParam
 		if needsIconAsset(b) {
-			png := render.ButtonIcon(b)
-			name := archiveIconName(b, png)
+			png, ext := render.ButtonIcon(b), ".png"
+			// The firmware plays GIFs itself, but only with a .gif name.
+			if b.IconData == nil {
+				if anim, ok := render.AnimatedButtonIcon(b); ok {
+					png, ext = anim, ".gif"
+				}
+			}
+			name := archiveIconName(b, png, ext)
 			vp.Icon = name
 			if !hasRealIcon(b) && b.Label != "" && b.Index != deck.InfoWindowIndex {
 				vp.Text = b.Label
@@ -126,17 +132,17 @@ func needsIconAsset(b deck.Button) bool {
 
 // archiveIconName includes a content hash so the firmware can never reuse a
 // cached asset with the same name after a page switch or an icon edit.
-func archiveIconName(b deck.Button, png []byte) string {
-	sum := sha256.Sum256(png)
+func archiveIconName(b deck.Button, data []byte, ext string) string {
+	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])[:12]
 	if b.Index == deck.InfoWindowIndex {
-		return "icons/info-window-" + digest + ".png"
+		return "icons/info-window-" + digest + ext
 	}
 	if b.ResolvedIcon != "" && b.IconData == nil && hasRealIcon(b) {
 		stem := strings.TrimSuffix(filepath.Base(b.ResolvedIcon), filepath.Ext(b.ResolvedIcon))
-		return "icons/" + sanitizeName(stem) + "-" + digest + ".png"
+		return "icons/" + sanitizeName(stem) + "-" + digest + ext
 	}
-	return fmt.Sprintf("icons/%d-%s.png", b.Index, digest)
+	return fmt.Sprintf("icons/%d-%s%s", b.Index, digest, ext)
 }
 
 func sanitizeName(s string) string {
