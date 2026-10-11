@@ -35,6 +35,12 @@ func (f *fakeSources) OBSStatus() (OBSInfo, error) {
 	return OBSInfo{Scene: "Kamera", Recording: true, RecordTime: "00:01:02"}, nil
 }
 func (f *fakeSources) Cover(string) image.Image { return nil }
+func (f *fakeSources) AudioState(target string) (AudioInfo, error) {
+	if target == "spotify" {
+		return AudioInfo{AppFound: false}, nil
+	}
+	return AudioInfo{Volume: 40, MicMuted: true, Output: "Headset", AppFound: true}, nil
+}
 func (f *fakeSources) LoadImage(string) (image.Image, error) {
 	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 }
@@ -181,5 +187,23 @@ func TestHomeAndOBSWidgets(t *testing.T) {
 	scene := deck.Widget{Type: deck.WidgetOBS, Show: "scene"}
 	if got := string(e.Render(scene, 196, 196, "#000000", time.Now())); got != "text|#000000|OBS|[Kamera]" {
 		t.Fatalf("scene: %s", got)
+	}
+}
+
+func TestAudioWidgets(t *testing.T) {
+	e := newEngine(&fakeSources{})
+	e.SetLanguage("en")
+	cases := []struct {
+		w    deck.Widget
+		want string
+	}{
+		{deck.Widget{Type: deck.WidgetAudio, Show: "volume"}, "text|#000000|Volume|[40 %]"},
+		{deck.Widget{Type: deck.WidgetAudio, Show: "mic"}, "text|#B91C1C|Microphone|[muted]"},
+		{deck.Widget{Type: deck.WidgetAudio, Show: "output"}, "text|#000000|Output|[Headset]"},
+		{deck.Widget{Type: deck.WidgetAudio, Show: "volume", Target: "spotify"}, "text|#000000|spotify|[–]"},
+	}
+	for _, c := range cases {
+		e.Render(c.w, 196, 196, "#000000", time.Now())
+		eventually(t, func() bool { return string(e.Render(c.w, 196, 196, "#000000", time.Now())) == c.want })
 	}
 }

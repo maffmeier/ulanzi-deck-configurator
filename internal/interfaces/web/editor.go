@@ -32,6 +32,12 @@ type editorAction struct {
 	Service   string            `json:"service"`
 	EntityID  string            `json:"entity_id"`
 	Target    string            `json:"target"`
+	Step      int               `json:"step"`
+	Topic     string            `json:"topic"`
+	Retain    bool              `json:"retain"`
+	App       string            `json:"app"`
+	Plugin    string            `json:"plugin"`
+	Settings  map[string]string `json:"settings"`
 }
 
 type editorToggle struct {
@@ -42,20 +48,25 @@ type editorToggle struct {
 }
 
 type editorWidget struct {
-	Type        string   `json:"type"`
-	Title       string   `json:"title"`
-	Format      string   `json:"format"`
-	Items       []string `json:"items"`
-	Cmd         string   `json:"cmd"`
-	IntervalS   float64  `json:"interval_s"`
-	Metric      string   `json:"metric"`
-	Paths       []string `json:"paths"`
-	OkColor     string   `json:"ok_color"`
-	FailColor   string   `json:"fail_color"`
-	EntityID    string   `json:"entity_id"`
-	Attribute   string   `json:"attribute"`
-	ActiveState string   `json:"active_state"`
-	Show        string   `json:"show"`
+	Type        string            `json:"type"`
+	Title       string            `json:"title"`
+	Format      string            `json:"format"`
+	Items       []string          `json:"items"`
+	Cmd         string            `json:"cmd"`
+	IntervalS   float64           `json:"interval_s"`
+	Metric      string            `json:"metric"`
+	Paths       []string          `json:"paths"`
+	OkColor     string            `json:"ok_color"`
+	FailColor   string            `json:"fail_color"`
+	EntityID    string            `json:"entity_id"`
+	Attribute   string            `json:"attribute"`
+	ActiveState string            `json:"active_state"`
+	Show        string            `json:"show"`
+	Target      string            `json:"target"`
+	Topic       string            `json:"topic"`
+	URL         string            `json:"url"`
+	Plugin      string            `json:"plugin"`
+	Settings    map[string]string `json:"settings"`
 }
 
 type editorTextStyle struct {
@@ -247,7 +258,8 @@ func toEditorAction(a deck.Action) editorAction {
 	ea := editorAction{
 		Type: string(a.Type), Cmd: a.Cmd, Keys: a.Keys, CommandID: a.CommandID, URL: a.URL, Page: a.Page,
 		Op: a.Op, Minutes: a.Minutes, Method: a.Method, Body: a.Body, Headers: a.Headers, Text: a.Text,
-		Ms: a.Ms, Service: a.Service, EntityID: a.EntityID, Target: a.Target, Steps: []editorAction{},
+		Ms: a.Ms, Service: a.Service, EntityID: a.EntityID, Target: a.Target, Step: a.Step, Steps: []editorAction{},
+		Topic: a.Topic, Retain: a.Retain, App: a.App, Plugin: a.Plugin, Settings: nonNilMap(a.Settings),
 	}
 	for _, step := range a.Steps {
 		ea.Steps = append(ea.Steps, toEditorAction(step))
@@ -260,6 +272,8 @@ func toAction(ea editorAction) deck.Action {
 		Type: deck.ActionType(ea.Type), Cmd: ea.Cmd, Keys: ea.Keys, CommandID: ea.CommandID, URL: ea.URL,
 		Page: ea.Page, Op: ea.Op, Minutes: ea.Minutes, Method: ea.Method, Body: ea.Body, Text: ea.Text,
 		Ms: ea.Ms, Service: strings.TrimSpace(ea.Service), EntityID: strings.TrimSpace(ea.EntityID), Target: ea.Target,
+		Step: ea.Step, Topic: strings.TrimSpace(ea.Topic), Retain: ea.Retain, App: ea.App, Plugin: ea.Plugin,
+		Settings: cleanMap(ea.Settings),
 	}
 	headers := map[string]string{}
 	for k, v := range ea.Headers {
@@ -280,7 +294,8 @@ func toEditorWidget(w deck.Widget) editorWidget {
 	return editorWidget{
 		Type: string(w.Type), Title: w.Title, Format: w.Format, Items: nonNil(w.Items), Cmd: w.Cmd,
 		IntervalS: w.IntervalS, Metric: w.Metric, Paths: nonNil(w.Paths), OkColor: w.OkColor, FailColor: w.FailColor,
-		EntityID: w.EntityID, Attribute: w.Attribute, ActiveState: w.ActiveState, Show: w.Show,
+		EntityID: w.EntityID, Attribute: w.Attribute, ActiveState: w.ActiveState, Show: w.Show, Target: w.Target,
+		Topic: w.Topic, URL: w.URL, Plugin: w.Plugin, Settings: nonNilMap(w.Settings),
 	}
 }
 
@@ -291,7 +306,8 @@ func fromEditorWidget(ew editorWidget, onKey bool, baseDir string) (deck.Widget,
 		Type: deck.WidgetType(ew.Type), Title: strings.TrimSpace(ew.Title), Format: ew.Format, Items: ew.Items,
 		Cmd: ew.Cmd, IntervalS: ew.IntervalS, Metric: ew.Metric, OkColor: ew.OkColor, FailColor: ew.FailColor,
 		EntityID: strings.TrimSpace(ew.EntityID), Attribute: strings.TrimSpace(ew.Attribute),
-		ActiveState: strings.TrimSpace(ew.ActiveState), Show: ew.Show,
+		ActiveState: strings.TrimSpace(ew.ActiveState), Show: ew.Show, Target: strings.TrimSpace(ew.Target),
+		Topic: strings.TrimSpace(ew.Topic), URL: strings.TrimSpace(ew.URL), Plugin: ew.Plugin, Settings: cleanMap(ew.Settings),
 	}
 	for _, p := range ew.Paths {
 		if p = strings.TrimSpace(p); p != "" {
@@ -387,6 +403,27 @@ func fromEditorDisplay(ed editorDisplay) deck.Display {
 		d.Night = &deck.NightMode{From: ed.NightFrom, To: ed.NightTo, Brightness: ed.NightBright}
 	}
 	return d
+}
+
+func nonNilMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
+}
+
+// cleanMap drops empty values, so unset plugin settings stay out of the YAML.
+func cleanMap(m map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range m {
+		if k = strings.TrimSpace(k); k != "" && v != "" {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func nonNil(s []string) []string {

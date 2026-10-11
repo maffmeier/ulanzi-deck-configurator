@@ -22,6 +22,7 @@ const (
 	ActionDelay      ActionType = "delay"
 	ActionHome       ActionType = "home_assistant"
 	ActionOBS        ActionType = "obs"
+	ActionAudio      ActionType = "audio"
 )
 
 // Timer operations for ActionTimer.
@@ -37,6 +38,21 @@ var OBSOps = []string{
 	"switch_scene", "toggle_record", "start_record", "stop_record",
 	"toggle_stream", "start_stream", "stop_stream", "toggle_mute", "toggle_replay_buffer", "save_replay",
 }
+
+// Audio operations. Target is an application for volume and mute (empty:
+// the default output) and a device name for output_set.
+const (
+	AudioVolumeUp   = "volume_up"
+	AudioVolumeDown = "volume_down"
+	AudioMute       = "mute"
+	AudioMicMute    = "mic_mute"
+	AudioOutputNext = "output_next"
+	AudioOutputSet  = "output_set"
+
+	DefaultAudioStep = 5
+)
+
+var AudioOps = []string{AudioVolumeUp, AudioVolumeDown, AudioMute, AudioMicMute, AudioOutputNext, AudioOutputSet}
 
 // Special switch_page targets that page relative to the current page.
 const (
@@ -70,8 +86,19 @@ type Action struct {
 	// Home Assistant service call, e.g. light.toggle on light.kitchen.
 	Service  string
 	EntityID string
-	// Target is the OBS scene or input an op applies to.
+	// Target is the OBS scene or input an op applies to, or the app or
+	// device of an audio action.
 	Target string
+	// Step is the volume change of an audio action in percent.
+	Step int
+	// MQTT message; the payload is Body.
+	Topic  string
+	Retain bool
+	// App is the meeting application of a meeting action.
+	App string
+	// Plugin action: Plugin names the plugin, Op its action.
+	Plugin   string
+	Settings map[string]string
 }
 
 func (a Action) Validate() error {
@@ -147,6 +174,16 @@ func (a Action) validate(inMulti bool) error {
 		if (a.Op == "switch_scene" || a.Op == "toggle_mute") && strings.TrimSpace(a.Target) == "" {
 			return fmt.Errorf("obs %s needs a target", a.Op)
 		}
+	case ActionAudio:
+		if !slices.Contains(AudioOps, a.Op) {
+			return fmt.Errorf("unknown audio op %q", a.Op)
+		}
+		if a.Op == AudioOutputSet && strings.TrimSpace(a.Target) == "" {
+			return fmt.Errorf("audio output_set needs the device name as target")
+		}
+		if a.Step < 0 || a.Step > 100 {
+			return fmt.Errorf("audio step must be in 0..100, got %d", a.Step)
+		}
 	default:
 		return fmt.Errorf("unknown action type: %q", a.Type)
 	}
@@ -187,6 +224,14 @@ func (a Action) Clean() Action {
 		clean.Service, clean.EntityID = a.Service, a.EntityID
 	case ActionOBS:
 		clean.Op, clean.Target = a.Op, a.Target
+	case ActionAudio:
+		clean.Op = a.Op
+		switch a.Op {
+		case AudioVolumeUp, AudioVolumeDown:
+			clean.Target, clean.Step = a.Target, a.Step
+		case AudioMute, AudioOutputSet:
+			clean.Target = a.Target
+		}
 	}
 	return clean
 }

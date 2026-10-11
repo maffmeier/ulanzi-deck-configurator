@@ -6,6 +6,7 @@ import (
 
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/application"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/audio"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/media"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 )
@@ -32,5 +33,10 @@ func (widgetSources) NowPlaying() (application.MediaInfo, error) {
 }
 
 func (widgetSources) Cover(url string) image.Image { return media.Cover(url) }
+
+func (widgetSources) AudioState(target string) (application.AudioInfo, error) {
+	st, err := audio.Current(target)
+	return application.AudioInfo{Volume: st.Volume, Muted: st.Muted, MicMuted: st.MicMuted, Output: st.Output, AppFound: st.AppFound}, err
+}
 
 func (widgetSources) LoadImage(path string) (image.Image, error) { return render.DecodeImageFile(path) }

@@ -34,6 +34,12 @@ type rawAction struct {
 	Service   string            `yaml:"service"`
 	EntityID  string            `yaml:"entity_id"`
 	Target    string            `yaml:"target"`
+	Step      int               `yaml:"step"`
+	Topic     string            `yaml:"topic"`
+	Retain    bool              `yaml:"retain"`
+	App       string            `yaml:"app"`
+	Plugin    string            `yaml:"plugin"`
+	Settings  map[string]string `yaml:"settings"`
 }
 
 type rawToggle struct {
@@ -43,20 +49,25 @@ type rawToggle struct {
 }
 
 type rawWidget struct {
-	Type        string   `yaml:"type"`
-	Title       string   `yaml:"title"`
-	Format      string   `yaml:"format"`
-	Items       []string `yaml:"items"`
-	Cmd         string   `yaml:"cmd"`
-	IntervalS   float64  `yaml:"interval_s"`
-	Metric      string   `yaml:"metric"`
-	Paths       []string `yaml:"paths"`
-	OkColor     string   `yaml:"ok_color"`
-	FailColor   string   `yaml:"fail_color"`
-	EntityID    string   `yaml:"entity_id"`
-	Attribute   string   `yaml:"attribute"`
-	ActiveState string   `yaml:"active_state"`
-	Show        string   `yaml:"show"`
+	Type        string            `yaml:"type"`
+	Title       string            `yaml:"title"`
+	Format      string            `yaml:"format"`
+	Items       []string          `yaml:"items"`
+	Cmd         string            `yaml:"cmd"`
+	IntervalS   float64           `yaml:"interval_s"`
+	Metric      string            `yaml:"metric"`
+	Paths       []string          `yaml:"paths"`
+	OkColor     string            `yaml:"ok_color"`
+	FailColor   string            `yaml:"fail_color"`
+	EntityID    string            `yaml:"entity_id"`
+	Attribute   string            `yaml:"attribute"`
+	ActiveState string            `yaml:"active_state"`
+	Show        string            `yaml:"show"`
+	Target      string            `yaml:"target"`
+	Topic       string            `yaml:"topic"`
+	URL         string            `yaml:"url"`
+	Plugin      string            `yaml:"plugin"`
+	Settings    map[string]string `yaml:"settings"`
 }
 
 type rawTextStyle struct {
@@ -356,6 +367,12 @@ func toAction(raw rawAction) deck.Action {
 		Service:   raw.Service,
 		EntityID:  raw.EntityID,
 		Target:    raw.Target,
+		Step:      raw.Step,
+		Topic:     raw.Topic,
+		Retain:    raw.Retain,
+		App:       raw.App,
+		Plugin:    raw.Plugin,
+		Settings:  raw.Settings,
 	}
 	for _, step := range raw.Steps {
 		action.Steps = append(action.Steps, toAction(step))
@@ -424,6 +441,11 @@ func toWidget(raw rawWidget, baseDir string) deck.Widget {
 		Attribute:   raw.Attribute,
 		ActiveState: raw.ActiveState,
 		Show:        raw.Show,
+		Target:      raw.Target,
+		Topic:       raw.Topic,
+		URL:         raw.URL,
+		Plugin:      raw.Plugin,
+		Settings:    raw.Settings,
 	}
 	for _, p := range raw.Paths {
 		w.ResolvedPaths = append(w.ResolvedPaths, ResolvePath(p, baseDir))

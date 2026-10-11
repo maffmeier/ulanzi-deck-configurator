@@ -25,10 +25,14 @@ var deckTexts = map[string]map[string]string{
 		"back": "← Zurück", "error": "Fehler", "imageMissing": "Bild fehlt", "timer": "Timer",
 		"done": "Fertig", "nothingPlaying": "Keine Wiedergabe", "offline": "offline", "off": "aus",
 		"haOffline": "HA offline", "cpu": "CPU", "memory": "RAM", "network": "Netzwerk",
+		"volume": "Lautstärke", "mic": "Mikrofon", "output": "Ausgabe", "muted": "stumm",
+		"micOn": "an", "micOff": "stumm",
 	},
 	"en": {
 		"back": "← Back", "error": "Error", "imageMissing": "Image missing", "timer": "Timer",
 		"done": "Done", "nothingPlaying": "Nothing playing", "offline": "offline", "off": "off",
 		"haOffline": "HA offline", "cpu": "CPU", "memory": "RAM", "network": "Network",
+		"volume": "Volume", "mic": "Microphone", "output": "Output", "muted": "muted",
+		"micOn": "on", "micOff": "muted",
 	},
 }

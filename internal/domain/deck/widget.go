@@ -18,7 +18,11 @@ const (
 	WidgetMedia   WidgetType = "media"
 	WidgetHome    WidgetType = "home_assistant"
 	WidgetOBS     WidgetType = "obs"
+	WidgetAudio   WidgetType = "audio"
 )
+
+// AudioShows are the things an audio widget can display.
+var AudioShows = []string{"volume", "mic", "output"}
 
 // OBSShows are the things an obs widget can display.
 var OBSShows = []string{"scene", "record", "stream"}
@@ -58,8 +62,17 @@ type Widget struct {
 	EntityID    string
 	Attribute   string
 	ActiveState string
-	// Show selects what an obs widget displays.
+	// Show selects what an obs or audio widget displays.
 	Show string
+	// Target is the application whose volume an audio widget shows.
+	Target string
+	// Topic is the MQTT topic an mqtt widget shows.
+	Topic string
+	// URL is the calendar (ICS) of a calendar widget.
+	URL string
+	// Plugin widget: Plugin names the plugin, Show its widget.
+	Plugin   string
+	Settings map[string]string
 }
 
 // Normalize validates the widget and fills defaults. Keys can't show image
@@ -114,6 +127,16 @@ func (w *Widget) Normalize(onKey bool) error {
 		if !slices.Contains(OBSShows, w.Show) {
 			return fmt.Errorf("obs widget shows scene, record or stream, got %q", w.Show)
 		}
+	case WidgetAudio:
+		if w.Show == "" {
+			w.Show = "volume"
+		}
+		if !slices.Contains(AudioShows, w.Show) {
+			return fmt.Errorf("audio widget shows volume, mic or output, got %q", w.Show)
+		}
+		if err := normalizeColors(w); err != nil {
+			return err
+		}
 	case WidgetTimer, WidgetMedia:
 	default:
 		return fmt.Errorf("unknown widget type %q", w.Type)
@@ -150,6 +173,11 @@ func (w Widget) Clean() Widget {
 		clean.OkColor, clean.FailColor, clean.IntervalS = w.OkColor, w.FailColor, w.IntervalS
 	case WidgetOBS:
 		clean.Title, clean.Show = w.Title, w.Show
+	case WidgetAudio:
+		clean.Title, clean.Show, clean.OkColor, clean.FailColor = w.Title, w.Show, w.OkColor, w.FailColor
+		if w.Show == "volume" {
+			clean.Target = w.Target
+		}
 	}
 	return clean
 }

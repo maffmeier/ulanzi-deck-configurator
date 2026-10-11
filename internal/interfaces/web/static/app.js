@@ -11,7 +11,7 @@ const SLOTS = Object.freeze([
 
 const ACTION_TYPES = Object.freeze([
     "none", "shell", "shortcut", "type_text", "url", "http", "switch_page",
-    "predefined_command", "multi", "timer", "home_assistant", "obs",
+    "predefined_command", "multi", "timer", "audio", "home_assistant", "obs",
 ]);
 const PRESS_MODES = Object.freeze(["tap", "repeat", "hold"]);
 const TIMER_OPS = Object.freeze(["toggle", "start", "pause", "reset"]);
@@ -19,9 +19,11 @@ const OBS_OPS = Object.freeze([
     "switch_scene", "toggle_record", "start_record", "stop_record", "toggle_stream",
     "start_stream", "stop_stream", "toggle_mute", "toggle_replay_buffer", "save_replay",
 ]);
+const AUDIO_OPS = Object.freeze(["volume_up", "volume_down", "mute", "mic_mute", "output_next", "output_set"]);
+const AUDIO_SHOWS = Object.freeze(["volume", "mic", "output"]);
 const WIDGET_TYPES = Object.freeze([
     { id: "clock" }, { id: "metrics" }, { id: "command" }, { id: "graph" },
-    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "home_assistant" }, { id: "obs" },
+    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "home_assistant" }, { id: "obs" },
 ]);
 const GRAPH_METRICS = Object.freeze(["cpu", "memory", "network"]);
 const METRICS = Object.freeze(["cpu", "memory", "gpu", "temperature", "disk", "network", "battery"]);
@@ -38,6 +40,7 @@ const ACTION_ICONS = Object.freeze({
     multi: "fa:solid:list-ol",
     home_assistant: "fa:solid:house",
     obs: "fa:solid:video",
+    audio: "fa:solid:volume-high",
 });
 
 // Presets of the action list; label/hint are i18n keys. The backend's
@@ -80,6 +83,17 @@ const BASE_GROUPS = Object.freeze([
         ],
     },
     {
+        id: "audio",
+        items: [
+            { id: "audio-up", key: "audioUp", icon: "fa:solid:volume-high", action: { type: "audio", op: "volume_up", step: 5 }, live: { type: "audio", show: "volume" } },
+            { id: "audio-down", key: "audioDown", icon: "fa:solid:volume-low", action: { type: "audio", op: "volume_down", step: 5 }, useIcon: true },
+            { id: "audio-mute", key: "audioMute", icon: "fa:solid:volume-xmark", action: { type: "audio", op: "mute" }, useIcon: true },
+            { id: "audio-mic", key: "audioMic", icon: "fa:solid:microphone-slash", action: { type: "audio", op: "mic_mute" }, live: { type: "audio", show: "mic" } },
+            { id: "audio-output", key: "audioOutput", icon: "fa:solid:headphones", action: { type: "audio", op: "output_next" }, live: { type: "audio", show: "output" } },
+            { id: "audio-app", key: "audioApp", icon: "fa:solid:sliders", action: { type: "audio", op: "volume_up", step: 5, target: "spotify" }, live: { type: "audio", show: "volume", target: "spotify" }, focus: true },
+        ],
+    },
+    {
         id: "smart",
         items: [
             { id: "ha-toggle", key: "haToggle", icon: "fa:solid:lightbulb", action: { type: "home_assistant", service: "light.toggle" }, useIcon: true, focus: true },
@@ -114,13 +128,14 @@ function emptyAction(type = "none") {
     return {
         type, cmd: "", keys: "", command_id: "", url: "", page: "", op: "toggle", minutes: 25,
         method: "POST", body: "", headers: {}, text: "", steps: [], ms: 500,
-        service: "", entity_id: "", target: "",
+        service: "", entity_id: "", target: "", step: 5, topic: "", retain: false, app: "", plugin: "", settings: {},
     };
 }
 
 function normalizeAction(raw) {
     const a = { ...emptyAction(), ...(raw || {}) };
     a.headers = a.headers || {};
+    a.settings = a.settings || {};
     a.steps = (a.steps || []).map(normalizeAction);
     return a;
 }
@@ -129,13 +144,14 @@ function emptyWidget(type = "none") {
     return {
         type, title: "", format: "%H:%M", items: type === "metrics" ? ["cpu", "memory"] : [],
         cmd: "", interval_s: 5, metric: "cpu", paths: [], ok_color: "", fail_color: "",
-        entity_id: "", attribute: "", active_state: "on", show: "scene",
+        entity_id: "", attribute: "", active_state: "on", show: type === "audio" ? "volume" : "scene",
+        target: "", topic: "", url: "", plugin: "", settings: {},
     };
 }
 
 function normalizeWidget(raw) {
     if (!raw) return emptyWidget();
-    return { ...emptyWidget(raw.type), ...raw, items: raw.items || [], paths: raw.paths || [] };
+    return { ...emptyWidget(raw.type), ...raw, items: raw.items || [], paths: raw.paths || [], settings: raw.settings || {} };
 }
 
 function normalizeButton(raw) {
@@ -176,7 +192,7 @@ function storedLang() {
 
 window.deckApp = function deckApp() {
     return {
-        INFO_INDEX, FONTS, METRICS, PRESS_MODES, TIMER_OPS, OBS_OPS, GRAPH_METRICS,
+        INFO_INDEX, FONTS, METRICS, PRESS_MODES, TIMER_OPS, OBS_OPS, GRAPH_METRICS, AUDIO_OPS, AUDIO_SHOWS,
         lang: storedLang(),
         previews: {},
         widgetFields: "",
@@ -474,6 +490,7 @@ window.deckApp = function deckApp() {
             if (a.type === "predefined_command" && !a.command_id) a.command_id = this.predefined[0]?.id || "";
             if (a.type === "timer" && !TIMER_OPS.includes(a.op)) a.op = "toggle";
             if (a.type === "obs" && !OBS_OPS.includes(a.op)) a.op = "toggle_record";
+            if (a.type === "audio" && !AUDIO_OPS.includes(a.op)) a.op = "volume_up";
             if (a.type === "http" && !a.method) a.method = "POST";
             if (a.type === "multi" && !a.steps.length) a.steps = [emptyAction("shell")];
             if (this.cur && a === this.cur.action && !this.pressModeAllowed(this.cur.press)) this.cur.press = "tap";
@@ -552,6 +569,7 @@ window.deckApp = function deckApp() {
                 case "timer": return `${this.t("action.timer")}: ${this.t("timer." + a.op)}`;
                 case "home_assistant": return `${a.service} ${a.entity_id}`;
                 case "obs": return `OBS: ${this.t("obs." + a.op)} ${a.target}`;
+                case "audio": return `${this.t("audio." + a.op)} ${a.target}`.trim();
             }
             return "";
         },

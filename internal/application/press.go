@@ -233,6 +233,16 @@ func (d *Daemon) execute(action deck.Action, index int, page string) {
 		d.engine.Timer(action.Op, action.Minutes, time.Now())
 		d.refreshWidgets()
 		return
+	case deck.ActionAudio:
+		// pactl and COM calls can take a moment; keep the event loop free.
+		go func() {
+			if err := d.runner.Run(action); err != nil {
+				d.log.Error("audio action failed", "index", index, "op", action.Op, "error", err)
+			}
+			d.engine.ExpireAudio()
+			d.refreshWidgets()
+		}()
+		return
 	}
 	if err := d.runner.Run(action); err != nil {
 		d.log.Error("action failed", "index", index, "page", page, "action", action.Type, "error", err)

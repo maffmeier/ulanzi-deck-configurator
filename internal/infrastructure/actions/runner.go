@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/audio"
 )
 
 type Runner struct {
@@ -48,6 +49,8 @@ func (r *Runner) Run(action deck.Action) error {
 		return r.httpRequest(action)
 	case deck.ActionTypeText:
 		return r.typeText(action.Text)
+	case deck.ActionAudio:
+		return audio.Run(action)
 	}
 	return fmt.Errorf("action type %q cannot be executed by the runner", action.Type)
 }

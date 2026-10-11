@@ -223,3 +223,30 @@ func TestPageForApp(t *testing.T) {
 		t.Fatal("no match expected")
 	}
 }
+
+func TestAudioActionValidation(t *testing.T) {
+	ok := []Action{
+		{Type: ActionAudio, Op: AudioVolumeUp},
+		{Type: ActionAudio, Op: AudioMute, Target: "spotify"},
+		{Type: ActionAudio, Op: AudioOutputSet, Target: "Headset"},
+	}
+	for _, a := range ok {
+		if err := a.Validate(); err != nil {
+			t.Fatalf("%+v: %v", a, err)
+		}
+	}
+	bad := []Action{
+		{Type: ActionAudio, Op: "louder"},
+		{Type: ActionAudio, Op: AudioOutputSet},
+		{Type: ActionAudio, Op: AudioVolumeUp, Step: 300},
+	}
+	for _, a := range bad {
+		if a.Validate() == nil {
+			t.Fatalf("%+v must fail", a)
+		}
+	}
+	clean := Action{Type: ActionAudio, Op: AudioMicMute, Target: "x", Step: 5}.Clean()
+	if clean.Target != "" || clean.Step != 0 {
+		t.Fatalf("clean %+v", clean)
+	}
+}

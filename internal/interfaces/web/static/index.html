@@ -707,6 +707,19 @@
         <input type="text" x-model="a.target" @input="markDirty()" :placeholder="a.op === 'switch_scene' ? 'Kamera' : 'Mic/Aux'" /></label>
     </div>
   </template>
+  <template x-if="a.type === 'audio'">
+    <div class="row">
+      <label class="field"><span x-text="t('action.audio')"></span>
+        <select x-model="a.op" @change="markDirty()">
+          <template x-for="o in AUDIO_OPS" :key="o"><option :value="o" x-text="t('audio.' + o)" :selected="o === a.op"></option></template>
+        </select></label>
+      <label class="field grow" x-show="['volume_up', 'volume_down', 'mute', 'output_set'].includes(a.op)">
+        <span x-text="t(a.op === 'output_set' ? 'field.device' : 'field.app')"></span>
+        <input type="text" x-model="a.target" @input="markDirty()" :placeholder="a.op === 'output_set' ? 'Headset' : t('field.appHint')" /></label>
+      <label class="field" x-show="a.op === 'volume_up' || a.op === 'volume_down'"><span x-text="t('field.step')"></span>
+        <input type="number" min="1" max="100" x-model.number="a.step" @input="markDirty()" /></label>
+    </div>
+  </template>
   <template x-if="a.type === 'delay'">
     <label class="field"><span x-text="t('field.delay')"></span>
       <input type="number" min="1" max="60000" step="50" x-model.number="a.ms" @input="markDirty()" /></label>
@@ -762,6 +775,16 @@
           <template x-for="s in ['scene', 'record', 'stream']" :key="s"><option :value="s" x-text="t('obsShow.' + s)" :selected="s === w.show"></option></template>
         </select></label>
     </template>
+    <template x-if="w.type === 'audio'">
+      <label class="field"><span x-text="t('field.show')"></span>
+        <select x-model="w.show" @change="markDirty()">
+          <template x-for="s in AUDIO_SHOWS" :key="s"><option :value="s" x-text="t('audioShow.' + s)" :selected="s === w.show"></option></template>
+        </select></label>
+    </template>
+    <template x-if="w.type === 'audio' && w.show === 'volume'">
+      <label class="field grow"><span x-text="t('field.app')"></span>
+        <input type="text" x-model="w.target" @input="markDirty()" :placeholder="t('field.appHint')" /></label>
+    </template>
     <template x-if="w.type === 'command' || w.type === 'image' || w.type === 'home_assistant'">
       <label class="field"><span x-text="t(w.type === 'image' ? 'field.slideEvery' : 'field.refreshEvery')"></span>
         <input type="number" min="0.5" step="0.5" x-model.number="w.interval_s" @input="markDirty()" /></label>
@@ -789,13 +812,13 @@
         <input type="text" class="mono" x-model="w.active_state" @input="markDirty()" placeholder="on" /></label>
     </div>
   </template>
-  <template x-if="w.type === 'command' || w.type === 'home_assistant'">
+  <template x-if="w.type === 'command' || w.type === 'home_assistant' || w.type === 'audio'">
     <div class="row">
       <label class="check"><input type="checkbox" :checked="!!w.ok_color" @change="w.ok_color = $event.target.checked ? '#14532D' : ''; markDirty()" />
-        <span x-text="t(w.type === 'command' ? 'field.okColor' : 'field.activeColor')"></span></label>
+        <span x-text="t(w.type === 'command' ? 'field.okColor' : w.type === 'audio' ? 'field.audioOnColor' : 'field.activeColor')"></span></label>
       <input type="color" x-show="w.ok_color" x-model="w.ok_color" @input="markDirty()" />
       <label class="check"><input type="checkbox" :checked="!!w.fail_color" @change="w.fail_color = $event.target.checked ? '#B91C1C' : ''; markDirty()" />
-        <span x-text="t(w.type === 'command' ? 'field.failColor' : 'field.inactiveColor')"></span></label>
+        <span x-text="t(w.type === 'command' ? 'field.failColor' : w.type === 'audio' ? 'field.mutedColor' : 'field.inactiveColor')"></span></label>
       <input type="color" x-show="w.fail_color" x-model="w.fail_color" @input="markDirty()" />
     </div>
   </template>
@@ -810,6 +833,7 @@
   <template x-if="w.type === 'timer'"><p class="hint" x-text="t('widgetHint.timer')"></p></template>
   <template x-if="w.type === 'media'"><p class="hint" x-text="t('widgetHint.media')"></p></template>
   <template x-if="w.type === 'obs'"><p class="hint" x-text="t('widgetHint.obs')"></p></template>
+  <template x-if="w.type === 'audio'"><p class="hint" x-text="t('widgetHint.audio')"></p></template>
 </template>
 
 <datalist id="ha-services">

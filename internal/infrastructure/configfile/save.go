@@ -31,6 +31,12 @@ type outAction struct {
 	Service   string            `yaml:"service,omitempty"`
 	EntityID  string            `yaml:"entity_id,omitempty"`
 	Target    string            `yaml:"target,omitempty"`
+	Step      int               `yaml:"step,omitempty"`
+	Topic     string            `yaml:"topic,omitempty"`
+	Retain    bool              `yaml:"retain,omitempty"`
+	App       string            `yaml:"app,omitempty"`
+	Plugin    string            `yaml:"plugin,omitempty"`
+	Settings  map[string]string `yaml:"settings,omitempty"`
 }
 
 type outToggle struct {
@@ -40,20 +46,25 @@ type outToggle struct {
 }
 
 type outWidget struct {
-	Type        string   `yaml:"type"`
-	Title       string   `yaml:"title,omitempty"`
-	Format      string   `yaml:"format,omitempty"`
-	Items       []string `yaml:"items,omitempty"`
-	Cmd         string   `yaml:"cmd,omitempty"`
-	IntervalS   float64  `yaml:"interval_s,omitempty"`
-	Metric      string   `yaml:"metric,omitempty"`
-	Paths       []string `yaml:"paths,omitempty"`
-	OkColor     string   `yaml:"ok_color,omitempty"`
-	FailColor   string   `yaml:"fail_color,omitempty"`
-	EntityID    string   `yaml:"entity_id,omitempty"`
-	Attribute   string   `yaml:"attribute,omitempty"`
-	ActiveState string   `yaml:"active_state,omitempty"`
-	Show        string   `yaml:"show,omitempty"`
+	Type        string            `yaml:"type"`
+	Title       string            `yaml:"title,omitempty"`
+	Format      string            `yaml:"format,omitempty"`
+	Items       []string          `yaml:"items,omitempty"`
+	Cmd         string            `yaml:"cmd,omitempty"`
+	IntervalS   float64           `yaml:"interval_s,omitempty"`
+	Metric      string            `yaml:"metric,omitempty"`
+	Paths       []string          `yaml:"paths,omitempty"`
+	OkColor     string            `yaml:"ok_color,omitempty"`
+	FailColor   string            `yaml:"fail_color,omitempty"`
+	EntityID    string            `yaml:"entity_id,omitempty"`
+	Attribute   string            `yaml:"attribute,omitempty"`
+	ActiveState string            `yaml:"active_state,omitempty"`
+	Show        string            `yaml:"show,omitempty"`
+	Target      string            `yaml:"target,omitempty"`
+	Topic       string            `yaml:"topic,omitempty"`
+	URL         string            `yaml:"url,omitempty"`
+	Plugin      string            `yaml:"plugin,omitempty"`
+	Settings    map[string]string `yaml:"settings,omitempty"`
 }
 
 type outTextStyle struct {
@@ -288,6 +299,12 @@ func toOutAction(a *deck.Action) *outAction {
 		Service:   a.Service,
 		EntityID:  a.EntityID,
 		Target:    a.Target,
+		Step:      a.Step,
+		Topic:     a.Topic,
+		Retain:    a.Retain,
+		App:       a.App,
+		Plugin:    a.Plugin,
+		Settings:  a.Settings,
 	}
 	for i := range a.Steps {
 		out.Steps = append(out.Steps, *toOutAction(&a.Steps[i]))
@@ -314,6 +331,11 @@ func toOutWidget(w *deck.Widget) *outWidget {
 		EntityID:  w.EntityID,
 		Attribute: w.Attribute,
 		Show:      w.Show,
+		Target:    w.Target,
+		Topic:     w.Topic,
+		URL:       w.URL,
+		Plugin:    w.Plugin,
+		Settings:  w.Settings,
 	}
 	if w.ActiveState != "on" {
 		ow.ActiveState = w.ActiveState
