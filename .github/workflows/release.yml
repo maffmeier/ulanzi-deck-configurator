@@ -54,9 +54,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
       - uses: actions/download-artifact@v8
         with:
           pattern: bin-linux-*
@@ -64,13 +61,13 @@ jobs:
           merge-multiple: true
       - name: deb und rpm bauen
         run: |
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-          export VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p dist/pkg out
-          for ARCH in amd64 arm64; do
-            install -m755 "dist/ulanzi-deck-linux-$ARCH" dist/pkg/ulanzi-deck
+          for arch in amd64 arm64; do
+            install -m755 "dist/ulanzi-deck-linux-$arch" dist/pkg/ulanzi-deck
             for packager in deb rpm; do
-              ARCH=$ARCH nfpm pkg --config packaging/linux/nfpm.yaml --packager $packager --target out/
+              docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/w -w /w \
+                -e VERSION="${GITHUB_REF_NAME#v}" -e ARCH="$arch" \
+                goreleaser/nfpm:latest pkg --config packaging/linux/nfpm.yaml --packager "$packager" --target out/
             done
           done
           ls -l out
