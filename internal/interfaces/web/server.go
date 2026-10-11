@@ -31,6 +31,7 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/d200"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/plugins"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 )
 
@@ -46,6 +47,7 @@ type Server struct {
 	Widgets    *application.WidgetEngine
 	Secrets    *integrations.SecretStore
 	RecentApps func() []string
+	Plugins    *plugins.Host
 	Log        *slog.Logger
 }
 
@@ -74,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/render/widget", s.renderWidget)
 	mux.HandleFunc("GET /api/secrets", s.getSecrets)
 	mux.HandleFunc("GET /api/desktop/recent-apps", s.recentApps)
+	mux.HandleFunc("GET /api/plugins", s.listPlugins)
 	mux.HandleFunc("PUT /api/secrets", s.putSecrets)
 	mux.HandleFunc("POST /api/secrets/test", s.testSecrets)
 	mux.HandleFunc("POST /api/assets", s.uploadAsset)
@@ -755,6 +758,17 @@ func (s *Server) testSecrets(w http.ResponseWriter, r *http.Request) {
 		result["teams"] = err.Error()
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) listPlugins(w http.ResponseWriter, _ *http.Request) {
+	out := map[string]any{"items": []plugins.Manifest{}, "dir": ""}
+	if s.Plugins != nil {
+		if list := s.Plugins.Manifests(); list != nil {
+			out["items"] = list
+		}
+		out["dir"] = configfile.CompactPath(s.Plugins.Dir())
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) recentApps(w http.ResponseWriter, _ *http.Request) {

@@ -8,6 +8,7 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/actions"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/plugins"
 )
 
 // integrationRunner executes home_assistant, obs, meeting and mqtt actions
@@ -17,6 +18,7 @@ type integrationRunner struct {
 	obs     *integrations.OBSClient
 	teams   *integrations.TeamsClient
 	mqtt    *integrations.MQTTClient
+	plugins *plugins.Host
 	runner  *actions.Runner
 	log     *slog.Logger
 }
@@ -32,6 +34,8 @@ func (r integrationRunner) Run(a deck.Action) error {
 		return r.meeting(a)
 	case deck.ActionMQTT:
 		return r.mqtt.Publish(a.Topic, a.Body, a.Retain)
+	case deck.ActionPlugin:
+		return r.plugins.RunAction(a.Plugin, a.Op, a.Settings)
 	}
 	return fmt.Errorf("unsupported integration action %q", a.Type)
 }

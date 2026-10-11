@@ -484,6 +484,11 @@ window.I18N = {
         "widgetHint.calendar": "Zeigt den laufenden oder nächsten Termin mit Countdown; 15 Minuten vorher färbt sich die Taste. Bei Google: Einstellungen → Kalender → „Privatadresse im iCal-Format“; bei Outlook: Kalender veröffentlichen → ICS-Link. Die Adresse ist geheim und steht in der deck.yaml.",
         "preset.liveCalendar": "Nächster Termin",
         "preset.liveCalendarHint": "Zeigt den nächsten Termin aus einem ICS-Kalender",
+
+        "action.plugin": "Plugin",
+        "widget.plugin": "Plugin",
+        "group.plugins": "Plugins",
+        "plugin.none": "Keine Plugins installiert. Plugins gehören in {dir} (siehe docs/plugins.md); danach den Editor neu laden.",
     },
 
     en: {
@@ -968,6 +973,11 @@ window.I18N = {
         "widgetHint.calendar": "Shows the current or next event with a countdown; the key changes color 15 minutes before. Google: Settings → calendar → “Secret address in iCal format”; Outlook: publish the calendar → ICS link. The address is secret and is stored in deck.yaml.",
         "preset.liveCalendar": "Next event",
         "preset.liveCalendarHint": "Shows the next event from an ICS calendar",
+
+        "action.plugin": "Plugin",
+        "widget.plugin": "Plugin",
+        "group.plugins": "Plugins",
+        "plugin.none": "No plugins installed. Plugins go into {dir} (see docs/plugins.md); reload the editor afterwards.",
     },
 };
 

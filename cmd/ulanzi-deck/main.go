@@ -27,6 +27,7 @@ import (
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/d200"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/integrations"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/metrics"
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/plugins"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/infrastructure/render"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/interfaces/tray"
 	"github.com/maffmeier/ulanzi-deck-configurator/internal/interfaces/web"
@@ -245,9 +246,11 @@ func runCommand(args []string) error {
 
 	dev := d200.NewDevice(d200.OpenHID, log.With("component", "deck"))
 	secrets := integrations.NewSecretStore(integrations.SecretsPath(configPath))
+	pluginHost := plugins.NewHost(filepath.Join(filepath.Dir(configPath), "plugins"), version, log.With("component", "plugins"))
+	defer pluginHost.Stop()
 	integ := integrationRunner{
 		secrets: secrets, obs: integrations.NewOBSClient(), teams: integrations.NewTeamsClient(secrets, version),
-		mqtt:   integrations.NewMQTTClient(secrets),
+		mqtt: integrations.NewMQTTClient(secrets), plugins: pluginHost,
 		runner: runner, log: log.With("component", "integrations"),
 	}
 	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner, integrations: integ}, render.Renderer{}, log.With("component", "widgets"))
@@ -269,6 +272,7 @@ func runCommand(args []string) error {
 		Widgets:    engine,
 		Secrets:    secrets,
 		RecentApps: daemon.RecentApps,
+		Plugins:    pluginHost,
 		Log:        log.With("component", "web"),
 	}
 	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second}

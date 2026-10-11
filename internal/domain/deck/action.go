@@ -25,6 +25,7 @@ const (
 	ActionAudio      ActionType = "audio"
 	ActionMeeting    ActionType = "meeting"
 	ActionMQTT       ActionType = "mqtt"
+	ActionPlugin     ActionType = "plugin"
 )
 
 // MeetingOps lists what each meeting app can do from the deck.
@@ -200,6 +201,10 @@ func (a Action) validate(inMulti bool) error {
 		if err := ValidateMQTTTopic(a.Topic); err != nil {
 			return err
 		}
+	case ActionPlugin:
+		if strings.TrimSpace(a.Plugin) == "" || strings.TrimSpace(a.Op) == "" {
+			return fmt.Errorf("plugin action needs plugin and op")
+		}
 	case ActionMeeting:
 		ops, ok := MeetingOps[a.App]
 		if !ok {
@@ -262,6 +267,8 @@ func (a Action) Clean() Action {
 		clean.App, clean.Op = a.App, a.Op
 	case ActionMQTT:
 		clean.Topic, clean.Body, clean.Retain = a.Topic, a.Body, a.Retain
+	case ActionPlugin:
+		clean.Plugin, clean.Op, clean.Settings = a.Plugin, a.Op, a.Settings
 	case ActionAudio:
 		clean.Op = a.Op
 		switch a.Op {

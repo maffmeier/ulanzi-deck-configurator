@@ -22,6 +22,7 @@ const (
 	WidgetMeeting  WidgetType = "meeting"
 	WidgetMQTT     WidgetType = "mqtt"
 	WidgetCalendar WidgetType = "calendar"
+	WidgetPlugin   WidgetType = "plugin"
 )
 
 // DefaultCalendarInterval is how often a calendar feed is fetched.
@@ -146,6 +147,10 @@ func (w *Widget) Normalize(onKey bool) error {
 		if err := normalizeColors(w); err != nil {
 			return err
 		}
+	case WidgetPlugin:
+		if strings.TrimSpace(w.Plugin) == "" || strings.TrimSpace(w.Show) == "" {
+			return fmt.Errorf("plugin widget needs plugin and show (the widget id)")
+		}
 	case WidgetCalendar:
 		if strings.TrimSpace(w.URL) == "" {
 			return fmt.Errorf("calendar widget needs the url of an ICS feed")
@@ -216,6 +221,8 @@ func (w Widget) Clean() Widget {
 		clean.Title, clean.Show = w.Title, w.Show
 	case WidgetCalendar:
 		clean.Title, clean.URL, clean.IntervalS, clean.OkColor = w.Title, w.URL, w.IntervalS, w.OkColor
+	case WidgetPlugin:
+		clean.Title, clean.Plugin, clean.Show, clean.Settings = w.Title, w.Plugin, w.Show, w.Settings
 	case WidgetMQTT:
 		clean.Title, clean.Topic, clean.Attribute, clean.ActiveState = w.Title, w.Topic, w.Attribute, w.ActiveState
 		clean.OkColor, clean.FailColor = w.OkColor, w.FailColor

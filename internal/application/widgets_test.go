@@ -38,6 +38,9 @@ func (f *fakeSources) Cover(string) image.Image { return nil }
 func (f *fakeSources) MQTTValue(topic string) (string, bool, error) {
 	return `{"state":"ON","sensor":{"temperature":21.5}}`, topic != "empty", nil
 }
+func (f *fakeSources) PluginWidget(plugin, widget string, settings map[string]string) (PluginView, bool, error) {
+	return PluginView{Title: plugin, Lines: []string{widget + " " + settings["city"]}, Color: "#abcdef"}, true, nil
+}
 func (f *fakeSources) MeetingState() (MeetingInfo, error) {
 	return MeetingInfo{InMeeting: true, Muted: true, HandRaised: true}, nil
 }
@@ -267,4 +270,13 @@ func TestNextEventAndWhen(t *testing.T) {
 	if ev, _ := nextEvent(events[:2], now); !ev.AllDay || e.eventWhen(ev, now) != "heute" {
 		t.Fatalf("all-day fallback %+v", ev)
 	}
+}
+
+func TestPluginWidget(t *testing.T) {
+	e := newEngine(&fakeSources{})
+	w := deck.Widget{Type: deck.WidgetPlugin, Plugin: "weather", Show: "temp", Settings: map[string]string{"city": "Kiel"}}
+	e.Render(w, 196, 196, "#000000", time.Now())
+	eventually(t, func() bool {
+		return string(e.Render(w, 196, 196, "#000000", time.Now())) == "text|#ABCDEF|weather|[temp Kiel]"
+	})
 }

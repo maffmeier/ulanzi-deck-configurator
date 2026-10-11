@@ -215,7 +215,7 @@ func (d *Daemon) execute(action deck.Action, index int, page string) {
 	case deck.ActionMulti:
 		d.runMulti(action, index, page)
 		return
-	case deck.ActionHome, deck.ActionOBS, deck.ActionMeeting, deck.ActionMQTT:
+	case deck.ActionHome, deck.ActionOBS, deck.ActionMeeting, deck.ActionMQTT, deck.ActionPlugin:
 		if d.integrations == nil {
 			d.log.Error("integration not available", "action", action.Type)
 			return
@@ -230,6 +230,11 @@ func (d *Daemon) execute(action deck.Action, index int, page string) {
 				d.refreshWidgets()
 			case deck.ActionMQTT:
 				d.engine.ExpireMQTT()
+				d.refreshWidgets()
+			case deck.ActionPlugin:
+				// Give the plugin a moment to send its new state.
+				time.Sleep(200 * time.Millisecond)
+				d.engine.ExpirePlugins()
 				d.refreshWidgets()
 			}
 		}()

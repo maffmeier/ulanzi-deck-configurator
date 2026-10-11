@@ -11,7 +11,7 @@ const SLOTS = Object.freeze([
 
 const ACTION_TYPES = Object.freeze([
     "none", "shell", "shortcut", "type_text", "url", "http", "switch_page",
-    "predefined_command", "multi", "timer", "audio", "meeting", "home_assistant", "obs", "mqtt",
+    "predefined_command", "multi", "timer", "audio", "meeting", "home_assistant", "obs", "mqtt", "plugin",
 ]);
 const PRESS_MODES = Object.freeze(["tap", "repeat", "hold"]);
 const TIMER_OPS = Object.freeze(["toggle", "start", "pause", "reset"]);
@@ -33,7 +33,7 @@ const TRIGGER_EVENTS = Object.freeze(["time", "startup", "connect", "lock", "unl
 const WEEKDAYS = Object.freeze(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
 const WIDGET_TYPES = Object.freeze([
     { id: "clock" }, { id: "metrics" }, { id: "command" }, { id: "graph" },
-    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "calendar" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" }, { id: "mqtt" },
+    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "calendar" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" }, { id: "mqtt" }, { id: "plugin" },
 ]);
 const GRAPH_METRICS = Object.freeze(["cpu", "memory", "network"]);
 const METRICS = Object.freeze(["cpu", "memory", "gpu", "temperature", "disk", "network", "battery"]);
@@ -53,6 +53,7 @@ const ACTION_ICONS = Object.freeze({
     audio: "fa:solid:volume-high",
     meeting: "fa:solid:users",
     mqtt: "fa:solid:tower-cell",
+    plugin: "fa:solid:puzzle-piece",
 });
 
 // Presets of the action list; label/hint are i18n keys. The backend's
@@ -227,6 +228,7 @@ window.deckApp = function deckApp() {
         widgetFields: "",
         actionFields: "",
         predefined: [],
+        plugins: { items: [], dir: "" },
         slots: SLOTS,
         editor: null,
         currentPage: "",
@@ -265,7 +267,7 @@ window.deckApp = function deckApp() {
             this.actionFields = document.getElementById("tpl-action-fields").innerHTML;
             this.widgetFields = document.getElementById("tpl-widget-fields").innerHTML;
             document.documentElement.lang = this.lang;
-            await Promise.all([this.load(), this.loadPredefined()]);
+            await Promise.all([this.load(), this.loadPredefined(), this.loadPlugins()]);
             this.pollHealth();
             this.pollWidgetPreviews();
             this.pollPreview();
@@ -525,6 +527,7 @@ window.deckApp = function deckApp() {
             if (a.type === "obs" && !OBS_OPS.includes(a.op)) a.op = "toggle_record";
             if (a.type === "audio" && !AUDIO_OPS.includes(a.op)) a.op = "volume_up";
             if (a.type === "meeting") this.meetingAppChanged(a);
+            if (a.type === "plugin") this.pluginChanged(a, "actions");
             if (a.type === "http" && !a.method) a.method = "POST";
             if (a.type === "multi" && !a.steps.length) a.steps = [emptyAction("shell")];
             if (this.cur && a === this.cur.action && !this.pressModeAllowed(this.cur.press)) this.cur.press = "tap";
@@ -612,6 +615,7 @@ window.deckApp = function deckApp() {
                 case "audio": return `${this.t("audio." + a.op)} ${a.target}`.trim();
                 case "meeting": return `${this.t("meetingApp." + a.app)}: ${this.t("meeting." + a.op)}`;
                 case "mqtt": return `MQTT ${a.topic}`;
+                case "plugin": return `${this.plugin(a.plugin)?.name || a.plugin}: ${this.pluginItems(a.plugin, "actions").find((i) => i.id === a.op)?.label || a.op}`;
             }
             return "";
         },
@@ -684,6 +688,53 @@ window.deckApp = function deckApp() {
                 g.items.push({ ...p, label: this.predefinedLabel(p.id) });
             }
             return groups;
+        },
+
+        async loadPlugins() {
+            try {
+                const res = await fetch("/api/plugins");
+                this.plugins = await res.json();
+            } catch (_err) {
+                this.plugins = { items: [], dir: "" };
+            }
+        },
+
+        plugin(id) {
+            return this.plugins.items.find((p) => p.id === id);
+        },
+
+        pluginItems(id, kind) {
+            return this.plugin(id)?.[kind] || [];
+        },
+
+        pluginSettings(id, kind, itemId) {
+            return this.pluginItems(id, kind).find((i) => i.id === itemId)?.settings || [];
+        },
+
+        // Picks the first plugin and item, so the selects never show a value
+        // that isn't stored.
+        pluginChanged(target, kind) {
+            if (!this.plugin(target.plugin)) target.plugin = this.plugins.items[0]?.id || "";
+            const field = kind === "actions" ? "op" : "show";
+            const items = this.pluginItems(target.plugin, kind);
+            if (!items.some((i) => i.id === target[field])) target[field] = items[0]?.id || "";
+            target.settings = target.settings || {};
+            this.markDirty();
+        },
+
+        pluginGroup() {
+            const items = [];
+            for (const p of this.plugins.items) {
+                for (const a of p.actions || []) {
+                    items.push({ id: `plugin:${p.id}:a:${a.id}`, label: `${p.name}: ${a.label || a.id}`, icon: a.icon || ACTION_ICONS.plugin,
+                        hint: p.name, action: { type: "plugin", plugin: p.id, op: a.id, settings: {} }, useIcon: true });
+                }
+                for (const w of p.widgets || []) {
+                    items.push({ id: `plugin:${p.id}:w:${w.id}`, label: `${p.name}: ${w.label || w.id}`, icon: w.icon || ACTION_ICONS.plugin,
+                        hint: p.name, live: { type: "plugin", plugin: p.id, show: w.id, settings: {} } });
+                }
+            }
+            return items.length ? [{ id: "plugins", name: this.t("group.plugins"), items }] : [];
         },
 
         async loadSensors() {
@@ -1046,6 +1097,7 @@ window.deckApp = function deckApp() {
                     const items = g.items.map((i) => this.presetFor(i));
                     return { id: g.id, name: this.t(`group.${g.id}`), items: g.id === "navigation" ? [...items, ...pageItems] : items };
                 }),
+                ...this.pluginGroup(),
                 ...this.predefinedGroups().map((g) => ({
                     id: g.id,
                     name: g.name,
@@ -1274,7 +1326,9 @@ window.deckApp = function deckApp() {
 
         addWidget(type) {
             if (!type) return;
-            this.editor.small_window.widgets.push(emptyWidget(type));
+            const w = emptyWidget(type);
+            if (type === "plugin") this.pluginChanged(w, "widgets");
+            this.editor.small_window.widgets.push(w);
             this.editor.small_window.enabled = true;
             this.markDirty();
         },
@@ -1294,6 +1348,7 @@ window.deckApp = function deckApp() {
 
         setLive(type) {
             this.cur.live = emptyWidget(type);
+            if (type === "plugin") this.pluginChanged(this.cur.live, "widgets");
             this.markDirty();
         },
 
@@ -1338,6 +1393,7 @@ window.deckApp = function deckApp() {
             if (w.type === "home_assistant") return w.entity_id.trim() !== "";
             if (w.type === "mqtt") return w.topic.trim() !== "" && !/[+#]/.test(w.topic);
             if (w.type === "calendar") return w.url.trim() !== "";
+            if (w.type === "plugin") return Boolean(w.plugin && w.show);
             return w.type !== "none";
         },
 

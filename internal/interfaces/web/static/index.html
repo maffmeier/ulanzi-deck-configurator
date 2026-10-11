@@ -762,6 +762,25 @@
         <input type="text" x-model="a.target" @input="markDirty()" :placeholder="a.op === 'switch_scene' ? 'Kamera' : 'Mic/Aux'" /></label>
     </div>
   </template>
+  <template x-if="a.type === 'plugin'">
+    <div class="field-group">
+      <p class="hint" x-show="!plugins.items.length" x-text="t('plugin.none', { dir: plugins.dir })"></p>
+      <div class="row" x-show="plugins.items.length">
+        <label class="field"><span>Plugin</span>
+          <select x-model="a.plugin" @change="pluginChanged(a, 'actions')">
+            <template x-for="p in plugins.items" :key="p.id"><option :value="p.id" x-text="p.name" :selected="p.id === a.plugin"></option></template>
+          </select></label>
+        <label class="field"><span x-text="t('field.function')"></span>
+          <select x-model="a.op" @change="markDirty()">
+            <template x-for="i in pluginItems(a.plugin, 'actions')" :key="i.id"><option :value="i.id" x-text="i.label || i.id" :selected="i.id === a.op"></option></template>
+          </select></label>
+        <template x-for="s in pluginSettings(a.plugin, 'actions', a.op)" :key="s.key">
+          <label class="field grow"><span x-text="s.label || s.key"></span>
+            <input type="text" :value="a.settings[s.key] || ''" @input="a.settings = { ...a.settings, [s.key]: $event.target.value }; markDirty()" :placeholder="s.placeholder" /></label>
+        </template>
+      </div>
+    </div>
+  </template>
   <template x-if="a.type === 'mqtt'">
     <div class="field-group">
       <div class="row">
@@ -886,6 +905,23 @@
   <template x-if="w.type === 'command'">
     <label class="field"><span x-text="t('field.commandOutput')"></span>
       <input type="text" class="mono" x-model="w.cmd" @input="markDirty()" placeholder="curl -s 'wttr.in/Berlin?format=3'" /></label>
+  </template>
+  <template x-if="w.type === 'plugin'">
+    <div class="row">
+      <p class="hint" x-show="!plugins.items.length" x-text="t('plugin.none', { dir: plugins.dir })"></p>
+      <label class="field" x-show="plugins.items.length"><span>Plugin</span>
+        <select x-model="w.plugin" @change="pluginChanged(w, 'widgets')">
+          <template x-for="p in plugins.items" :key="p.id"><option :value="p.id" x-text="p.name" :selected="p.id === w.plugin"></option></template>
+        </select></label>
+      <label class="field" x-show="plugins.items.length"><span x-text="t('field.show')"></span>
+        <select x-model="w.show" @change="markDirty()">
+          <template x-for="i in pluginItems(w.plugin, 'widgets')" :key="i.id"><option :value="i.id" x-text="i.label || i.id" :selected="i.id === w.show"></option></template>
+        </select></label>
+      <template x-for="s in pluginSettings(w.plugin, 'widgets', w.show)" :key="s.key">
+        <label class="field grow"><span x-text="s.label || s.key"></span>
+          <input type="text" :value="w.settings[s.key] || ''" @input="w.settings = { ...w.settings, [s.key]: $event.target.value }; markDirty()" :placeholder="s.placeholder" /></label>
+      </template>
+    </div>
   </template>
   <template x-if="w.type === 'calendar'">
     <div class="row">

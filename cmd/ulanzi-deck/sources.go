@@ -25,6 +25,11 @@ func (s widgetSources) HomeAssistantState(entityID string) (application.HomeStat
 
 func (s widgetSources) OBSStatus() (application.OBSInfo, error) { return s.integrations.obsStatus() }
 
+func (s widgetSources) PluginWidget(plugin, widget string, settings map[string]string) (application.PluginView, bool, error) {
+	v, ok, err := s.integrations.plugins.Widget(plugin, widget, settings)
+	return application.PluginView{Title: v.Title, Lines: v.Lines, Color: v.Color}, ok, err
+}
+
 func (widgetSources) CalendarEvents(url string) ([]application.CalendarEvent, error) {
 	events, err := calendar.Fetch(url, time.Now())
 	out := make([]application.CalendarEvent, 0, len(events))

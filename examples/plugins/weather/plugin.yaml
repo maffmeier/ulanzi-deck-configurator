@@ -1,0 +1,14 @@
+# Example plugin: current weather from wttr.in.
+# Install: copy this folder to <config dir>/plugins/weather
+name: Wetter
+command: [python3, weather.py]
+actions:
+  - id: refresh
+    label: Wetter aktualisieren
+    icon: fa:solid:cloud-sun
+widgets:
+  - id: current
+    label: Aktuelles Wetter
+    icon: fa:solid:temperature-half
+    settings:
+      - {key: city, label: Ort, placeholder: Berlin}

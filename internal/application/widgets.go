@@ -107,6 +107,7 @@ type WidgetEngine struct {
 	meeting   map[string]*polled[MeetingInfo]
 	mqtt      map[string]*polled[mqttReading]
 	calendars map[string]*polled[[]CalendarEvent]
+	plugins   map[string]*polled[pluginReading]
 	lang      string
 }
 
@@ -139,6 +140,7 @@ func NewWidgetEngine(metrics Metrics, sources WidgetSources, renderer Renderer, 
 		meeting:   map[string]*polled[MeetingInfo]{},
 		mqtt:      map[string]*polled[mqttReading]{},
 		calendars: map[string]*polled[[]CalendarEvent]{},
+		plugins:   map[string]*polled[pluginReading]{},
 		timer:     timerState{duration: defaultTimerMins * time.Minute, remaining: defaultTimerMins * time.Minute},
 	}
 }
@@ -215,6 +217,8 @@ func (e *WidgetEngine) Render(wd deck.Widget, w, h int, bg string, now time.Time
 		return e.renderMQTT(wd, w, h, bg, now)
 	case deck.WidgetCalendar:
 		return e.renderCalendar(wd, w, h, bg, now)
+	case deck.WidgetPlugin:
+		return e.renderPlugin(wd, w, h, bg, now)
 	}
 	return e.renderer.Text(w, h, bg, "", []string{"?"}, false)
 }
