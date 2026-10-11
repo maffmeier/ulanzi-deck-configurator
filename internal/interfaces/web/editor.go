@@ -143,6 +143,7 @@ type editorConfig struct {
 	FixedButtons            []editorButton    `json:"fixed_buttons"`
 	SmallWindow             editorSmallWindow `json:"small_window"`
 	Triggers                []editorTrigger   `json:"triggers"`
+	Devices                 map[string]string `json:"devices"`
 	VersionedConfigPath     *string           `json:"versioned_config_path"`
 	SavedFirmwareBundlePath *string           `json:"saved_firmware_bundle_path"`
 }
@@ -156,6 +157,7 @@ type editorPutRequest struct {
 	FixedButtons       []editorButton    `json:"fixed_buttons"`
 	SmallWindow        editorSmallWindow `json:"small_window"`
 	Triggers           []editorTrigger   `json:"triggers"`
+	Devices            map[string]string `json:"devices"`
 	SaveFirmwareBundle bool              `json:"save_firmware_bundle"`
 }
 
@@ -377,6 +379,7 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 	for _, b := range cfg.FixedButtons {
 		ec.FixedButtons = append(ec.FixedButtons, toEditorButton(b))
 	}
+	ec.Devices = nonNilMap(cfg.Devices)
 	ec.Triggers = []editorTrigger{}
 	for _, t := range cfg.Triggers {
 		ec.Triggers = append(ec.Triggers, editorTrigger{Event: t.Event, At: t.At, Days: nonNil(t.Days), App: t.App, Action: toEditorAction(t.Action)})
@@ -562,6 +565,10 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 	}
 	cfg.Display = fromEditorDisplay(req.Display)
 	cfg.Language = req.Language
+	// The editor never edits the devices map, it only passes it through.
+	if len(req.Devices) > 0 {
+		cfg.Devices = req.Devices
+	}
 	var names []string
 	for _, p := range req.Pages {
 		name := strings.TrimSpace(p.Name)

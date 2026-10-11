@@ -18,6 +18,15 @@ type DeviceInfo struct {
 	Serial       string
 }
 
+// Key identifies a deck across reconnects: its serial number, or the
+// device path for units without one.
+func (d DeviceInfo) Key() string {
+	if d.Serial != "" {
+		return d.Serial
+	}
+	return d.Path
+}
+
 // The D200 exposes a vendor interface with 1024-byte reports and a boot
 // keyboard interface; only the former speaks the deck protocol.
 func isDeckInterface(d *usbhid.Device) bool {
@@ -49,7 +58,21 @@ type hidTransport struct {
 
 // OpenHID opens the first D200 that is attached.
 func OpenHID() (Transport, error) {
-	devices, err := usbhid.Enumerate(isDeckInterface)
+	return openMatching(func(*usbhid.Device) bool { return true })
+}
+
+// OpenKey returns an opener for the deck with the given Key, so several
+// decks can run side by side.
+func OpenKey(key string) Opener {
+	return func() (Transport, error) {
+		return openMatching(func(d *usbhid.Device) bool {
+			return d.SerialNumber() == key || (d.SerialNumber() == "" && d.Path() == key)
+		})
+	}
+}
+
+func openMatching(match func(*usbhid.Device) bool) (Transport, error) {
+	devices, err := usbhid.Enumerate(func(d *usbhid.Device) bool { return isDeckInterface(d) && match(d) })
 	if err != nil {
 		return nil, err
 	}

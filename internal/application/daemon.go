@@ -97,6 +97,8 @@ type Daemon struct {
 
 	// pressedShown maps keys drawn in their pressed look to their page.
 	pressedShown map[int]string
+	// engineShared means several daemons use the engine and its owner runs it.
+	engineShared bool
 }
 
 func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer, engine *WidgetEngine, cfg *deck.Config, log *slog.Logger) *Daemon {
@@ -120,6 +122,10 @@ func NewDaemon(dev Deck, runner ActionRunner, metrics Metrics, renderer Renderer
 	}
 }
 
+// ShareEngine leaves running the widget engine to the caller, for several
+// decks sharing one engine.
+func (d *Daemon) ShareEngine() { d.engineShared = true }
+
 func (d *Daemon) CurrentPage() string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -142,7 +148,9 @@ func (d *Daemon) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { d.eventLoop(ctx) })
 	wg.Go(func() { d.statusLoop(ctx) })
-	wg.Go(func() { d.engine.Run(ctx) })
+	if !d.engineShared {
+		wg.Go(func() { d.engine.Run(ctx) })
+	}
 	wg.Go(func() { d.liveLoop(ctx) })
 	wg.Go(func() { d.displayLoop(ctx) })
 	wg.Go(func() { d.appLoop(ctx) })

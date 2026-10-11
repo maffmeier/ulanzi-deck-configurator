@@ -255,3 +255,58 @@ func TestExportImportProfile(t *testing.T) {
 		t.Fatalf("import: %d %s", res.Code, res.Body)
 	}
 }
+
+func TestDeckOwnConfigAndRouting(t *testing.T) {
+	s, _ := newTestServer(t)
+	os.WriteFile(s.ConfigPath, []byte("default_page: main\npages:\n  main:\n    buttons:\n      - {index: 0, label: Gemeinsam}\n"), 0o644)
+	s.Decks = func() []DeckInfo { return []DeckInfo{{Key: "SER1", Connected: true}} }
+	s.ConfigFor = func(key string) (string, bool) {
+		main, _ := configfile.Load(s.ConfigPath)
+		return configfile.DeviceConfigPath(s.ConfigPath, main.Devices, key), key == "SER1"
+	}
+	h := s.Handler()
+
+	if rec := do(t, h, "POST", "/api/decks/SER1/own-config", nil); rec.Code != 200 {
+		t.Fatalf("own config: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(t, h, "POST", "/api/decks/OTHER/own-config", nil); rec.Code != 404 {
+		t.Fatalf("unknown deck: %d", rec.Code)
+	}
+	devicePath := filepath.Join(filepath.Dir(s.ConfigPath), "deck-SER1.yaml")
+	if data, _ := os.ReadFile(devicePath); !strings.Contains(string(data), "Gemeinsam") || strings.Contains(string(data), "devices") {
+		t.Fatalf("device config:\n%s", data)
+	}
+
+	var ed editorConfig
+	_ = json.Unmarshal(do(t, h, "GET", "/api/editor?device=SER1", nil).Body.Bytes(), &ed)
+	if ed.Path != devicePath {
+		t.Fatalf("editor path %q", ed.Path)
+	}
+	ed.Pages[0].Buttons[0].Label = "Nur Deck 1"
+	if rec := do(t, h, "PUT", "/api/editor?device=SER1", ed); rec.Code != 200 {
+		t.Fatalf("save device: %d %s", rec.Code, rec.Body)
+	}
+	if data, _ := os.ReadFile(devicePath); !strings.Contains(string(data), "Nur Deck 1") {
+		t.Fatal("device config not saved")
+	}
+
+	// Saving the main config from the editor keeps the devices map.
+	var mainEd editorConfig
+	_ = json.Unmarshal(do(t, h, "GET", "/api/editor", nil).Body.Bytes(), &mainEd)
+	if mainEd.Devices["SER1"] != "deck-SER1.yaml" {
+		t.Fatalf("devices %v", mainEd.Devices)
+	}
+	if rec := do(t, h, "PUT", "/api/editor", mainEd); rec.Code != 200 {
+		t.Fatalf("save main: %d", rec.Code)
+	}
+	if main, _ := configfile.Load(s.ConfigPath); main.Devices["SER1"] == "" || main.Pages[0].Buttons[0].Label != "Gemeinsam" {
+		t.Fatalf("main after save: %+v", main)
+	}
+
+	if rec := do(t, h, "DELETE", "/api/decks/SER1/own-config", nil); rec.Code != 200 {
+		t.Fatalf("shared: %d", rec.Code)
+	}
+	if main, _ := configfile.Load(s.ConfigPath); len(main.Devices) != 0 {
+		t.Fatalf("mapping left: %v", main.Devices)
+	}
+}

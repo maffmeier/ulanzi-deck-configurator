@@ -229,12 +229,6 @@ func runCommand(args []string) error {
 	if moved, err := configfile.MigrateSnapshots(configPath); moved > 0 || err != nil {
 		log.Info("moved saved versions into the backup directory", "count", moved, "error", err)
 	}
-	cfg, err := configfile.Load(configPath)
-	if err != nil {
-		log.Error("config invalid, starting with an empty layout until it is fixed", "path", configPath, "error", err)
-		cfg = fallbackConfig()
-	}
-
 	cat, err := catalog.Load()
 	if err != nil {
 		return fmt.Errorf("icon catalog: %w", err)
@@ -244,7 +238,6 @@ func runCommand(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	dev := d200.NewDevice(d200.OpenHID, log.With("component", "deck"))
 	secrets := integrations.NewSecretStore(integrations.SecretsPath(configPath))
 	pluginHost := plugins.NewHost(filepath.Join(filepath.Dir(configPath), "plugins"), version, log.With("component", "plugins"))
 	defer pluginHost.Stop()
@@ -253,25 +246,30 @@ func runCommand(args []string) error {
 		mqtt: integrations.NewMQTTClient(secrets), plugins: pluginHost,
 		runner: runner, log: log.With("component", "integrations"),
 	}
+	// One engine serves all decks and the editor preview, so timers and
+	// graphs look the same everywhere.
 	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner, integrations: integ}, render.Renderer{}, log.With("component", "widgets"))
-	daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, engine, cfg, log.With("component", "daemon"))
-
-	daemon.SetDesktop(desktopState{})
-	daemon.SetIntegrations(integ)
-
-	go dev.Run(ctx)
-	go daemon.Run(ctx)
-	go application.WatchConfig(ctx, configPath, configfile.Load, daemon.ApplyConfig, log.With("component", "watcher"))
+	decks := newFleet(configPath, log, func(dev application.Deck, cfg *deck.Config, log *slog.Logger) *application.Daemon {
+		daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, engine, cfg, log)
+		daemon.ShareEngine()
+		daemon.SetDesktop(desktopState{})
+		daemon.SetIntegrations(integ)
+		return daemon
+	})
+	go engine.Run(ctx)
+	go decks.Run(ctx)
 
 	server := &web.Server{
 		ConfigPath: configPath,
 		Version:    version,
 		Catalog:    cat,
 		Metrics:    reader,
-		Connected:  dev.Connected,
+		Connected:  decks.Connected,
+		Decks:      decks.Decks,
+		ConfigFor:  decks.ConfigFor,
 		Widgets:    engine,
 		Secrets:    secrets,
-		RecentApps: daemon.RecentApps,
+		RecentApps: decks.RecentApps,
 		Plugins:    pluginHost,
 		Log:        log.With("component", "web"),
 	}

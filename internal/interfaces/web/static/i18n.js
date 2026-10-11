@@ -489,6 +489,18 @@ window.I18N = {
         "widget.plugin": "Plugin",
         "group.plugins": "Plugins",
         "plugin.none": "Keine Plugins installiert. Plugins gehören in {dir} (siehe docs/plugins.md); danach den Editor neu laden.",
+
+        "decks.title": "Decks",
+        "decks.hint": "Alle Decks zeigen die gemeinsame Konfiguration, bis eines eine eigene bekommt. Oben lässt sich dann wählen, welches Deck bearbeitet wird.",
+        "decks.switch": "Welches Deck bearbeiten?",
+        "decks.main": "Gemeinsame Konfiguration",
+        "decks.own": "eigene Konfiguration",
+        "decks.shared": "gemeinsam",
+        "decks.makeOwn": "Eigene Konfiguration",
+        "decks.makeShared": "Gemeinsame verwenden",
+        "decks.saveFirst": "Ungespeicherte Änderungen gehen dabei verloren. Fortfahren?",
+        "decks.ownCreated": "Das Deck hat jetzt eine eigene Konfiguration (Kopie der gemeinsamen)",
+        "decks.sharedAgain": "Das Deck verwendet wieder die gemeinsame Konfiguration",
     },
 
     en: {
@@ -978,6 +990,18 @@ window.I18N = {
         "widget.plugin": "Plugin",
         "group.plugins": "Plugins",
         "plugin.none": "No plugins installed. Plugins go into {dir} (see docs/plugins.md); reload the editor afterwards.",
+
+        "decks.title": "Decks",
+        "decks.hint": "All decks show the shared config until one gets its own. You can then choose at the top which deck to edit.",
+        "decks.switch": "Which deck to edit?",
+        "decks.main": "Shared config",
+        "decks.own": "own config",
+        "decks.shared": "shared",
+        "decks.makeOwn": "Own config",
+        "decks.makeShared": "Use shared config",
+        "decks.saveFirst": "Unsaved changes will be lost. Continue?",
+        "decks.ownCreated": "The deck now has its own config (a copy of the shared one)",
+        "decks.sharedAgain": "The deck uses the shared config again",
     },
 };
 

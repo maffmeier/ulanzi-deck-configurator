@@ -38,6 +38,16 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+// DeckInfo describes an attached deck for the editor's deck switch.
+type DeckInfo struct {
+	Key        string `json:"key"`
+	Product    string `json:"product"`
+	Serial     string `json:"serial"`
+	Connected  bool   `json:"connected"`
+	ConfigPath string `json:"config_path"`
+	OwnConfig  bool   `json:"own_config"`
+}
+
 type Server struct {
 	ConfigPath string
 	Version    string
@@ -47,8 +57,11 @@ type Server struct {
 	Widgets    *application.WidgetEngine
 	Secrets    *integrations.SecretStore
 	RecentApps func() []string
-	Plugins    *plugins.Host
-	Log        *slog.Logger
+	// Decks lists attached decks; ConfigFor maps a deck to its config.
+	Decks     func() []DeckInfo
+	ConfigFor func(key string) (string, bool)
+	Plugins   *plugins.Host
+	Log       *slog.Logger
 }
 
 func (s *Server) Handler() http.Handler {
@@ -77,6 +90,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/secrets", s.getSecrets)
 	mux.HandleFunc("GET /api/desktop/recent-apps", s.recentApps)
 	mux.HandleFunc("GET /api/plugins", s.listPlugins)
+	mux.HandleFunc("GET /api/decks", s.listDecks)
+	mux.HandleFunc("POST /api/decks/{key}/own-config", s.ownDeckConfig)
+	mux.HandleFunc("DELETE /api/decks/{key}/own-config", s.sharedDeckConfig)
 	mux.HandleFunc("PUT /api/secrets", s.putSecrets)
 	mux.HandleFunc("POST /api/secrets/test", s.testSecrets)
 	mux.HandleFunc("POST /api/assets", s.uploadAsset)
@@ -156,14 +172,15 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(page))
 }
 
-func (s *Server) configExists() bool {
-	_, err := os.Stat(s.ConfigPath)
+func configExists(path string) bool {
+	_, err := os.Stat(path)
 	return err == nil
 }
 
 func (s *Server) configDir() string { return filepath.Dir(s.ConfigPath) }
 
-func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
 	found := 0
 	if devices, err := d200.Enumerate(); err == nil {
 		found = len(devices)
@@ -171,8 +188,8 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":             true,
 		"version":        s.Version,
-		"config_path":    s.ConfigPath,
-		"config_exists":  s.configExists(),
+		"config_path":    path,
+		"config_exists":  configExists(path),
 		"devices_found":  found,
 		"deck_connected": s.Connected != nil && s.Connected(),
 	})
@@ -193,24 +210,39 @@ func (s *Server) devices(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) getEditor(w http.ResponseWriter, _ *http.Request) {
-	if !s.configExists() {
-		writeJSON(w, http.StatusOK, defaultEditorConfig(s.ConfigPath))
+func (s *Server) getEditor(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
+	if !configExists(path) {
+		writeJSON(w, http.StatusOK, defaultEditorConfig(path))
 		return
 	}
-	cfg, err := configfile.Load(s.ConfigPath)
+	cfg, err := configfile.Load(path)
 	if err != nil {
 		writeDetail(w, http.StatusUnprocessableEntity, "config parse failed: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, toEditorConfig(cfg, s.ConfigPath, true))
+	writeJSON(w, http.StatusOK, toEditorConfig(cfg, path, true))
 }
 
-func (s *Server) parseYAML(text []byte) (*deck.Config, error) {
-	return configfile.Parse(text, s.configDir())
+// parseYAML resolves relative paths against the directory of the config
+// the text belongs to.
+func (s *Server) parseYAML(path string, text []byte) (*deck.Config, error) {
+	return configfile.Parse(text, filepath.Dir(path))
+}
+
+// pathFor is the config the request edits: the main config, or the one of
+// the deck named by ?device=.
+func (s *Server) pathFor(r *http.Request) string {
+	if key := r.URL.Query().Get("device"); key != "" && s.ConfigFor != nil {
+		if path, ok := s.ConfigFor(key); ok {
+			return path
+		}
+	}
+	return s.ConfigPath
 }
 
 func (s *Server) validateEditor(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
 	var req editorPutRequest
 	if err := readJSON(r, &req); err != nil {
 		writeDetail(w, http.StatusBadRequest, err.Error())
@@ -221,7 +253,7 @@ func (s *Server) validateEditor(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, failedSummary(err))
 		return
 	}
-	cfg, err := s.parseYAML(text)
+	cfg, err := s.parseYAML(path, text)
 	if err != nil {
 		writeJSON(w, http.StatusOK, failedSummary(err))
 		return
@@ -230,6 +262,7 @@ func (s *Server) validateEditor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) putEditor(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
 	var req editorPutRequest
 	if err := readJSON(r, &req); err != nil {
 		writeDetail(w, http.StatusBadRequest, err.Error())
@@ -240,17 +273,17 @@ func (s *Server) putEditor(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, failedSummary(err))
 		return
 	}
-	cfg, err := s.parseYAML(text)
+	cfg, err := s.parseYAML(path, text)
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, failedSummary(err))
 		return
 	}
-	versioned, bundle, err := s.save(text, cfg, req.SaveFirmwareBundle)
+	versioned, bundle, err := s.save(path, text, cfg, req.SaveFirmwareBundle)
 	if err != nil {
 		writeDetail(w, http.StatusInternalServerError, "write failed: "+err.Error())
 		return
 	}
-	resp := toEditorConfig(cfg, s.ConfigPath, true)
+	resp := toEditorConfig(cfg, path, true)
 	resp.VersionedConfigPath = strPtr(versioned)
 	resp.SavedFirmwareBundlePath = strPtr(bundle)
 	writeJSON(w, http.StatusOK, resp)
@@ -259,9 +292,9 @@ func (s *Server) putEditor(w http.ResponseWriter, r *http.Request) {
 // save keeps a version in the backup directory (and optionally the upload
 // ZIP of the default page) before atomically replacing the config. The
 // daemon's file watcher picks the change up within a second.
-func (s *Server) save(text []byte, cfg *deck.Config, withBundle bool) (string, string, error) {
+func (s *Server) save(path string, text []byte, cfg *deck.Config, withBundle bool) (string, string, error) {
 	now := time.Now()
-	versioned, err := configfile.WriteBackup(s.ConfigPath, text, now)
+	versioned, err := configfile.WriteBackup(path, text, now)
 	if err != nil {
 		return "", "", err
 	}
@@ -272,36 +305,37 @@ func (s *Server) save(text []byte, cfg *deck.Config, withBundle bool) (string, s
 			os.Remove(versioned)
 			return "", "", err
 		}
-		bundle = configfile.VersionedPath(filepath.Join(configfile.BackupDir(s.ConfigPath), filepath.Base(s.ConfigPath)), "firmware", ".zip", now)
+		bundle = configfile.VersionedPath(filepath.Join(configfile.BackupDir(path), filepath.Base(path)), "firmware", ".zip", now)
 		if err := os.WriteFile(bundle, blob, 0o644); err != nil {
 			os.Remove(versioned)
 			return "", "", err
 		}
 	}
-	if err := configfile.WriteAtomic(s.ConfigPath, text); err != nil {
+	if err := configfile.WriteAtomic(path, text); err != nil {
 		os.Remove(versioned)
 		if bundle != "" {
 			os.Remove(bundle)
 		}
 		return "", "", err
 	}
-	s.Log.Info("config saved", "path", s.ConfigPath, "snapshot", versioned)
+	s.Log.Info("config saved", "path", path, "snapshot", versioned)
 	return versioned, bundle, nil
 }
 
-func (s *Server) getConfig(w http.ResponseWriter, _ *http.Request) {
-	info, err := os.Stat(s.ConfigPath)
+func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
+	info, err := os.Stat(path)
 	if err != nil {
-		writeDetail(w, http.StatusNotFound, "config not found at "+s.ConfigPath)
+		writeDetail(w, http.StatusNotFound, "config not found at "+path)
 		return
 	}
-	content, err := os.ReadFile(s.ConfigPath)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		writeDetail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"path": s.ConfigPath, "content": string(content),
+		"path": path, "content": string(content),
 		"mtime": float64(info.ModTime().UnixNano()) / 1e9, "size": info.Size(),
 	})
 }
@@ -312,12 +346,13 @@ type configText struct {
 }
 
 func (s *Server) validateConfig(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
 	var req configText
 	if err := readJSON(r, &req); err != nil {
 		writeDetail(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	cfg, err := s.parseYAML([]byte(req.Content))
+	cfg, err := s.parseYAML(path, []byte(req.Content))
 	if err != nil {
 		writeJSON(w, http.StatusOK, failedSummary(err))
 		return
@@ -326,17 +361,18 @@ func (s *Server) validateConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
 	var req configText
 	if err := readJSON(r, &req); err != nil {
 		writeDetail(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	cfg, err := s.parseYAML([]byte(req.Content))
+	cfg, err := s.parseYAML(path, []byte(req.Content))
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, failedSummary(err))
 		return
 	}
-	versioned, bundle, err := s.save([]byte(req.Content), cfg, req.SaveFirmwareBundle)
+	versioned, bundle, err := s.save(path, []byte(req.Content), cfg, req.SaveFirmwareBundle)
 	if err != nil {
 		writeDetail(w, http.StatusInternalServerError, "write failed: "+err.Error())
 		return
@@ -347,17 +383,18 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, summary)
 }
 
-func (s *Server) listBackups(w http.ResponseWriter, _ *http.Request) {
-	backups, err := configfile.ListBackups(s.ConfigPath)
+func (s *Server) listBackups(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
+	backups, err := configfile.ListBackups(path)
 	if err != nil {
 		writeDetail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	current, _ := os.ReadFile(s.ConfigPath)
+	current, _ := os.ReadFile(path)
 	items := []map[string]any{}
 	for _, b := range backups {
 		item := map[string]any{"name": b.Name, "saved": b.Saved.Format(time.RFC3339), "size": b.Size}
-		if data, err := configfile.ReadBackup(s.ConfigPath, b.Name); err == nil && string(data) == string(current) {
+		if data, err := configfile.ReadBackup(path, b.Name); err == nil && string(data) == string(current) {
 			item["current"] = true
 		}
 		items = append(items, item)
@@ -368,7 +405,8 @@ func (s *Server) listBackups(w http.ResponseWriter, _ *http.Request) {
 // restoreBackup saves an old version as the current config, so restoring is
 // itself a new version and can be undone the same way.
 func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
-	text, err := configfile.ReadBackup(s.ConfigPath, r.PathValue("name"))
+	path := s.pathFor(r)
+	text, err := configfile.ReadBackup(path, r.PathValue("name"))
 	if errors.Is(err, configfile.ErrBackupNotFound) {
 		writeDetail(w, http.StatusNotFound, "backup not found")
 		return
@@ -377,22 +415,23 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	cfg, err := s.parseYAML(text)
+	cfg, err := s.parseYAML(path, text)
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, failedSummary(err))
 		return
 	}
-	if _, _, err := s.save(text, cfg, false); err != nil {
+	if _, _, err := s.save(path, text, cfg, false); err != nil {
 		writeDetail(w, http.StatusInternalServerError, "write failed: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, toEditorConfig(cfg, s.ConfigPath, true))
+	writeJSON(w, http.StatusOK, toEditorConfig(cfg, path, true))
 }
 
 // exportProfile downloads the saved config (or one page of it) with its
 // images as a .deckprofile file.
 func (s *Server) exportProfile(w http.ResponseWriter, r *http.Request) {
-	cfg, err := configfile.Load(s.ConfigPath)
+	path := s.pathFor(r)
+	cfg, err := configfile.Load(path)
 	if err != nil {
 		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -415,6 +454,7 @@ func (s *Server) exportProfile(w http.ResponseWriter, r *http.Request) {
 // importProfile unpacks the images of an uploaded profile next to the
 // config and returns its layout; the editor merges it and the user saves.
 func (s *Server) importProfile(w http.ResponseWriter, r *http.Request) {
+	path := s.pathFor(r)
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -442,7 +482,7 @@ func (s *Server) importProfile(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, toEditorConfig(cfg, s.ConfigPath, true))
+	writeJSON(w, http.StatusOK, toEditorConfig(cfg, path, true))
 }
 
 func fileExists(path string) bool {
@@ -758,6 +798,79 @@ func (s *Server) testSecrets(w http.ResponseWriter, r *http.Request) {
 		result["teams"] = err.Error()
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) decks() []DeckInfo {
+	if s.Decks == nil {
+		return []DeckInfo{}
+	}
+	return s.Decks()
+}
+
+func (s *Server) listDecks(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"items": s.decks()})
+}
+
+func (s *Server) knownDeck(key string) bool {
+	return slices.ContainsFunc(s.decks(), func(d DeckInfo) bool { return d.Key == key })
+}
+
+// ownDeckConfig gives a deck its own config file, starting as a copy of the
+// main layout, and records it in the devices map of the main config.
+func (s *Server) ownDeckConfig(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+	if !s.knownDeck(key) {
+		writeDetail(w, http.StatusNotFound, "unknown deck")
+		return
+	}
+	main, err := configfile.Load(s.ConfigPath)
+	if err != nil {
+		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	name := configfile.DeviceFileName(key)
+	target := filepath.Join(s.configDir(), name)
+	if !fileExists(target) {
+		copied := *main
+		copied.Devices = nil
+		text, err := configfile.Marshal(&copied)
+		if err == nil {
+			_, _, err = s.save(target, text, &copied, false)
+		}
+		if err != nil {
+			writeDetail(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if main.Devices == nil {
+		main.Devices = map[string]string{}
+	}
+	main.Devices[key] = name
+	s.saveMain(w, main)
+}
+
+// sharedDeckConfig makes a deck use the main config again; its own file
+// stays on disk.
+func (s *Server) sharedDeckConfig(w http.ResponseWriter, r *http.Request) {
+	main, err := configfile.Load(s.ConfigPath)
+	if err != nil {
+		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	delete(main.Devices, r.PathValue("key"))
+	s.saveMain(w, main)
+}
+
+func (s *Server) saveMain(w http.ResponseWriter, main *deck.Config) {
+	text, err := configfile.Marshal(main)
+	if err == nil {
+		_, _, err = s.save(s.ConfigPath, text, main, false)
+	}
+	if err != nil {
+		writeDetail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": s.decks()})
 }
 
 func (s *Server) listPlugins(w http.ResponseWriter, _ *http.Request) {

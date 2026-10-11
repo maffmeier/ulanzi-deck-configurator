@@ -229,6 +229,9 @@ window.deckApp = function deckApp() {
         actionFields: "",
         predefined: [],
         plugins: { items: [], dir: "" },
+        decks: [],
+        // Key of the deck being edited; empty edits the main config.
+        device: "",
         slots: SLOTS,
         editor: null,
         currentPage: "",
@@ -297,7 +300,7 @@ window.deckApp = function deckApp() {
         async load() {
             this.busy = true;
             try {
-                const res = await fetch("/api/editor");
+                const res = await fetch(this.api("/api/editor"));
                 const payload = await res.json();
                 if (!res.ok) throw new Error(payload.detail || this.t("msg.loadFailed"));
                 this.editor = this.normalizeEditor(payload);
@@ -408,7 +411,7 @@ window.deckApp = function deckApp() {
         async save() {
             this.busy = true;
             try {
-                const res = await fetch("/api/editor", {
+                const res = await fetch(this.api("/api/editor"), {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(this.payload()),
@@ -480,7 +483,7 @@ window.deckApp = function deckApp() {
         async openVersions() {
             this.versions = { open: true, items: [] };
             try {
-                const res = await fetch("/api/backups");
+                const res = await fetch(this.api("/api/backups"));
                 this.versions.items = (await res.json()).items || [];
             } catch (_err) {
                 this.toast(this.t("versions.failed"), "err");
@@ -494,7 +497,7 @@ window.deckApp = function deckApp() {
         async restoreVersion(item) {
             if (this.dirty && !confirm(this.t("msg.discardConfirm"))) return;
             try {
-                const res = await fetch(`/api/backups/${encodeURIComponent(item.name)}/restore`, { method: "POST" });
+                const res = await fetch(this.api(`/api/backups/${encodeURIComponent(item.name)}/restore`), { method: "POST" });
                 const payload = await res.json();
                 if (!res.ok) throw new Error(payload.error || payload.detail || this.t("msg.saveFailed"));
                 this.editor = this.normalizeEditor(payload);
@@ -635,16 +638,55 @@ window.deckApp = function deckApp() {
 
         iconUrl,
 
-        // ───────────── Status ─────────────
+        // ───────────── Status & decks ─────────────
+
+        api(path) {
+            if (!this.device) return path;
+            return path + (path.includes("?") ? "&" : "?") + "device=" + encodeURIComponent(this.device);
+        },
 
         async pollHealth() {
             try {
-                const res = await fetch("/api/health");
-                this.health = await res.json();
+                const [health, decks] = await Promise.all([fetch("/api/health"), fetch("/api/decks")]);
+                this.health = await health.json();
+                this.decks = (await decks.json()).items || [];
             } catch (_err) {
                 this.health = { deck_connected: false };
             }
             setTimeout(() => this.pollHealth(), 3000);
+        },
+
+        deckLabel(d) {
+            const own = this.t(d.own_config ? "decks.own" : "decks.shared");
+            return `${d.product || "D200"} ${d.serial ? "· " + d.serial.slice(-6) : ""} (${own})`;
+        },
+
+        currentDeck() {
+            return this.decks.find((d) => d.key === this.device);
+        },
+
+        async selectDeck(key) {
+            if (key === this.device) return;
+            if (this.dirty && !confirm(this.t("msg.discardConfirm"))) {
+                this.device = this.device;
+                return;
+            }
+            this.device = key;
+            await this.load();
+        },
+
+        async setOwnConfig(deckKey, own) {
+            if (this.dirty && !confirm(this.t("decks.saveFirst"))) return;
+            const res = await fetch(`/api/decks/${encodeURIComponent(deckKey)}/own-config`, { method: own ? "POST" : "DELETE" });
+            const payload = await res.json();
+            if (!res.ok) {
+                this.toast(payload.detail || this.t("msg.saveFailed"), "err");
+                return;
+            }
+            this.decks = payload.items || [];
+            this.device = deckKey;
+            await this.load();
+            this.toast(this.t(own ? "decks.ownCreated" : "decks.sharedAgain"), "ok");
         },
 
         async pollPreview() {
@@ -762,7 +804,7 @@ window.deckApp = function deckApp() {
                 if (this.dirty) return;
             }
             const link = document.createElement("a");
-            link.href = page ? `/api/export?page=${encodeURIComponent(page)}` : "/api/export";
+            link.href = this.api(page ? `/api/export?page=${encodeURIComponent(page)}` : "/api/export");
             document.body.appendChild(link);
             link.click();
             link.remove();

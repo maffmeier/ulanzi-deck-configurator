@@ -298,6 +298,9 @@ type Config struct {
 	// system language).
 	Language string
 	Triggers []Trigger
+	// Devices maps the serial number of a deck to its own config file;
+	// decks not listed use this config. Only read from the main config.
+	Devices map[string]string
 }
 
 func (c *Config) Validate() error {

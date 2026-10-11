@@ -133,15 +133,16 @@ type rawTrigger struct {
 }
 
 type rawConfig struct {
-	DefaultPage  string          `yaml:"default_page"`
-	Brightness   *int            `yaml:"brightness"`
-	Display      *rawDisplay     `yaml:"display"`
-	Language     string          `yaml:"language"`
-	SmallWindow  *rawSmallWindow `yaml:"small_window"`
-	Pages        yaml.Node       `yaml:"pages"`
-	FixedButtons []rawButton     `yaml:"fixed_buttons"`
-	Buttons      []rawButton     `yaml:"buttons"`
-	Triggers     []rawTrigger    `yaml:"triggers"`
+	DefaultPage  string            `yaml:"default_page"`
+	Brightness   *int              `yaml:"brightness"`
+	Display      *rawDisplay       `yaml:"display"`
+	Language     string            `yaml:"language"`
+	SmallWindow  *rawSmallWindow   `yaml:"small_window"`
+	Pages        yaml.Node         `yaml:"pages"`
+	FixedButtons []rawButton       `yaml:"fixed_buttons"`
+	Buttons      []rawButton       `yaml:"buttons"`
+	Triggers     []rawTrigger      `yaml:"triggers"`
+	Devices      map[string]string `yaml:"devices"`
 }
 
 // Load parses the YAML file at path.
@@ -160,7 +161,7 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 		return nil, err
 	}
 
-	cfg := &deck.Config{Brightness: deck.DefaultBrightness, Language: raw.Language}
+	cfg := &deck.Config{Brightness: deck.DefaultBrightness, Language: raw.Language, Devices: raw.Devices}
 	if raw.Brightness != nil {
 		cfg.Brightness = *raw.Brightness
 	}

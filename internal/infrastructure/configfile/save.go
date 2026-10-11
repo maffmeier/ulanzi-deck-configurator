@@ -132,14 +132,15 @@ type outTrigger struct {
 }
 
 type outConfig struct {
-	DefaultPage  string         `yaml:"default_page"`
-	Brightness   *int           `yaml:"brightness,omitempty"`
-	Display      *outDisplay    `yaml:"display,omitempty"`
-	Language     string         `yaml:"language,omitempty"`
-	SmallWindow  outSmallWindow `yaml:"small_window"`
-	Pages        yaml.Node      `yaml:"pages"`
-	FixedButtons []outButton    `yaml:"fixed_buttons,omitempty"`
-	Triggers     []outTrigger   `yaml:"triggers,omitempty"`
+	DefaultPage  string            `yaml:"default_page"`
+	Brightness   *int              `yaml:"brightness,omitempty"`
+	Display      *outDisplay       `yaml:"display,omitempty"`
+	Language     string            `yaml:"language,omitempty"`
+	SmallWindow  outSmallWindow    `yaml:"small_window"`
+	Pages        yaml.Node         `yaml:"pages"`
+	FixedButtons []outButton       `yaml:"fixed_buttons,omitempty"`
+	Triggers     []outTrigger      `yaml:"triggers,omitempty"`
+	Devices      map[string]string `yaml:"devices,omitempty"`
 }
 
 // Marshal renders a config in canonical form: page order is preserved,
@@ -158,7 +159,8 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 			MetricsItems:       cfg.SmallWindow.MetricsItems,
 			TemperatureSensors: cfg.SmallWindow.TemperatureSensors,
 		},
-		Pages: yaml.Node{Kind: yaml.MappingNode},
+		Pages:   yaml.Node{Kind: yaml.MappingNode},
+		Devices: cfg.Devices,
 	}
 	if d := cfg.Display; d.DimAfterS > 0 || d.OffWhenLocked || d.Night != nil || d.PressFeedback {
 		out.Display = &outDisplay{DimAfterS: d.DimAfterS, DimBrightness: d.DimBrightness, OffWhenLocked: d.OffWhenLocked, PressFeedback: d.PressFeedback}

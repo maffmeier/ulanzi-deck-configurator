@@ -61,6 +61,10 @@
       <output x-text="editor.brightness + '%'"></output>
     </label>
     </template>
+    <select class="deck-switch" x-show="decks.length > 1" :value="device" @change="selectDeck($event.target.value)" :title="t('decks.switch')">
+      <option value="" x-text="t('decks.main')"></option>
+      <template x-for="d in decks" :key="d.key"><option :value="d.key" x-text="deckLabel(d)" :selected="d.key === device"></option></template>
+    </select>
     <span class="conn" :class="health.deck_connected ? 'on' : 'off'"
           :title="t(health.deck_connected ? 'top.connectedLong' : 'top.disconnectedLong')">
       <i></i><span x-text="t(health.deck_connected ? 'top.connected' : 'top.disconnected')"></span>
@@ -478,6 +482,21 @@
               <option value="de">Deutsch</option><option value="en">English</option>
             </select></label>
           <label class="check"><input type="checkbox" x-model="saveBundle" /> <span x-text="t('settings.saveBundle')"></span></label>
+          <template x-if="decks.length">
+            <div class="field-group">
+              <h4 x-text="t('decks.title')"></h4>
+              <p class="hint" x-text="t('decks.hint')"></p>
+              <template x-for="d in decks" :key="d.key">
+                <div class="row deck-row">
+                  <span class="conn" :class="d.connected ? 'on' : 'off'"><i></i></span>
+                  <span class="grow" x-text="deckLabel(d)"></span>
+                  <code x-text="d.config_path"></code>
+                  <button x-show="!d.own_config" @click="setOwnConfig(d.key, true)" x-text="t('decks.makeOwn')"></button>
+                  <button class="ghost" x-show="d.own_config" @click="setOwnConfig(d.key, false)" x-text="t('decks.makeShared')"></button>
+                </div>
+              </template>
+            </div>
+          </template>
           <h4 x-text="t('profile.title')"></h4>
           <p class="hint" x-text="t('profile.hint')"></p>
           <div class="row">

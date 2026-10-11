@@ -433,3 +433,9 @@ input[type=time], input[type=password] {
 /* Automations */
 .trigger-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; display: grid; gap: 8px; background: var(--panel-2); }
 .trigger-card .row { align-items: flex-end; }
+
+/* Decks */
+.deck-switch { max-width: 260px; }
+.deck-row { align-items: center; gap: 10px; }
+.deck-row .grow { flex: 1; }
+.deck-row code { font-size: 12px; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
