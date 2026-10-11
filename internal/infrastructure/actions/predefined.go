@@ -24,6 +24,8 @@ type predefined struct {
 	aliases []string
 	// action returns nil when the command has no implementation on goos.
 	action func(goos string) *deck.Action
+	// hidden entries still resolve for old configs but are not offered.
+	hidden bool
 }
 
 const (
@@ -142,21 +144,20 @@ var predefinedCommands = []predefined{
 	{id: "window_fullscreen", label: "Vollbild", group: groupBrowser, icon: "fa:solid:expand", action: os3(perOS{key("F11"), key("F11"), key("ctrl+cmd+f")})},
 	{id: "window_close", label: "Fenster schließen", group: groupBrowser, icon: "fa:solid:rectangle-xmark", action: os3(perOS{key("alt+F4"), key("alt+F4"), key("cmd+w")})},
 
-	// Videokonferenz – the default shortcuts of the desktop/web apps; they
-	// only work while the meeting window has focus.
-	{id: "meeting_zoom_mic", label: "Zoom: Mikrofon", group: groupMeeting, icon: "fa:solid:microphone-slash", action: os3(perOS{key("alt+a"), key("alt+a"), key("cmd+shift+a")})},
-	{id: "meeting_zoom_camera", label: "Zoom: Kamera", group: groupMeeting, icon: "fa:solid:video-slash", action: os3(perOS{key("alt+v"), key("alt+v"), key("cmd+shift+v")})},
-	{id: "meeting_teams_mic", label: "Teams: Mikrofon", group: groupMeeting, icon: "fa:brands:microsoft", action: modKeys("mod+shift+m")},
-	{id: "meeting_teams_camera", label: "Teams: Kamera", group: groupMeeting, icon: "fa:solid:video-slash", action: modKeys("mod+shift+o")},
-	{id: "meeting_meet_mic", label: "Meet: Mikrofon", group: groupMeeting, icon: "fa:brands:google", action: modKeys("mod+d")},
-	{id: "meeting_meet_camera", label: "Meet: Kamera", group: groupMeeting, icon: "fa:solid:video-slash", action: modKeys("mod+e")},
+	// Videokonferenz – superseded by meeting actions, kept for old configs.
+	{id: "meeting_zoom_mic", label: "Zoom: Mikrofon", group: groupMeeting, icon: "fa:solid:microphone-slash", action: os3(perOS{key("alt+a"), key("alt+a"), key("cmd+shift+a")}), hidden: true},
+	{id: "meeting_zoom_camera", label: "Zoom: Kamera", group: groupMeeting, icon: "fa:solid:video-slash", action: os3(perOS{key("alt+v"), key("alt+v"), key("cmd+shift+v")}), hidden: true},
+	{id: "meeting_teams_mic", label: "Teams: Mikrofon", group: groupMeeting, icon: "fa:brands:microsoft", action: modKeys("mod+shift+m"), hidden: true},
+	{id: "meeting_teams_camera", label: "Teams: Kamera", group: groupMeeting, icon: "fa:solid:video-slash", action: modKeys("mod+shift+o"), hidden: true},
+	{id: "meeting_meet_mic", label: "Meet: Mikrofon", group: groupMeeting, icon: "fa:brands:google", action: modKeys("mod+d"), hidden: true},
+	{id: "meeting_meet_camera", label: "Meet: Kamera", group: groupMeeting, icon: "fa:solid:video-slash", action: modKeys("mod+e"), hidden: true},
 }
 
 // Predefined lists the commands available on this platform.
 func Predefined() []PredefinedInfo {
 	var list []PredefinedInfo
 	for _, p := range predefinedCommands {
-		if p.action(runtime.GOOS) == nil {
+		if p.hidden || p.action(runtime.GOOS) == nil {
 			continue
 		}
 		list = append(list, PredefinedInfo{ID: p.id, Label: p.label, Group: p.group, Icon: p.icon})

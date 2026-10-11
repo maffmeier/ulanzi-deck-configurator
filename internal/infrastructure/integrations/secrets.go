@@ -1,4 +1,5 @@
-// Package integrations talks to external services: Home Assistant and OBS.
+// Package integrations talks to external services: Home Assistant, OBS,
+// Microsoft Teams and MQTT brokers.
 package integrations
 
 import (
@@ -15,6 +16,19 @@ import (
 type Secrets struct {
 	HomeAssistant HomeAssistantSecrets `yaml:"home_assistant" json:"home_assistant"`
 	OBS           OBSSecrets           `yaml:"obs" json:"obs"`
+	Teams         TeamsSecrets         `yaml:"teams,omitempty" json:"teams"`
+	MQTT          MQTTSecrets          `yaml:"mqtt,omitempty" json:"mqtt"`
+}
+
+// TeamsSecrets holds the pairing token Teams hands out.
+type TeamsSecrets struct {
+	Token string `yaml:"token,omitempty" json:"token"`
+}
+
+type MQTTSecrets struct {
+	URL      string `yaml:"url,omitempty" json:"url"`
+	Username string `yaml:"username,omitempty" json:"username"`
+	Password string `yaml:"password,omitempty" json:"password"`
 }
 
 type HomeAssistantSecrets struct {

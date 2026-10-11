@@ -23,7 +23,16 @@ const (
 	ActionHome       ActionType = "home_assistant"
 	ActionOBS        ActionType = "obs"
 	ActionAudio      ActionType = "audio"
+	ActionMeeting    ActionType = "meeting"
 )
+
+// MeetingOps lists what each meeting app can do from the deck.
+var MeetingOps = map[string][]string{
+	"teams":   {"mute", "camera", "hand", "blur", "leave"},
+	"zoom":    {"mute", "camera", "hand", "share", "leave"},
+	"discord": {"mute", "deafen"},
+	"meet":    {"mute", "camera", "hand"},
+}
 
 // Timer operations for ActionTimer.
 const (
@@ -174,6 +183,14 @@ func (a Action) validate(inMulti bool) error {
 		if (a.Op == "switch_scene" || a.Op == "toggle_mute") && strings.TrimSpace(a.Target) == "" {
 			return fmt.Errorf("obs %s needs a target", a.Op)
 		}
+	case ActionMeeting:
+		ops, ok := MeetingOps[a.App]
+		if !ok {
+			return fmt.Errorf("meeting app must be teams, zoom, discord or meet, got %q", a.App)
+		}
+		if !slices.Contains(ops, a.Op) {
+			return fmt.Errorf("%s supports %v, not %q", a.App, ops, a.Op)
+		}
 	case ActionAudio:
 		if !slices.Contains(AudioOps, a.Op) {
 			return fmt.Errorf("unknown audio op %q", a.Op)
@@ -224,6 +241,8 @@ func (a Action) Clean() Action {
 		clean.Service, clean.EntityID = a.Service, a.EntityID
 	case ActionOBS:
 		clean.Op, clean.Target = a.Op, a.Target
+	case ActionMeeting:
+		clean.App, clean.Op = a.App, a.Op
 	case ActionAudio:
 		clean.Op = a.Op
 		switch a.Op {

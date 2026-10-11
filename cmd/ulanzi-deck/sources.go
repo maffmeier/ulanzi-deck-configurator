@@ -23,6 +23,10 @@ func (s widgetSources) HomeAssistantState(entityID string) (application.HomeStat
 
 func (s widgetSources) OBSStatus() (application.OBSInfo, error) { return s.integrations.obsStatus() }
 
+func (s widgetSources) MeetingState() (application.MeetingInfo, error) {
+	return s.integrations.meetingState()
+}
+
 func (s widgetSources) CommandOutput(ctx context.Context, cmd string) (string, bool, error) {
 	return s.runner.Output(ctx, cmd)
 }

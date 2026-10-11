@@ -104,6 +104,7 @@ type WidgetEngine struct {
 	homes    map[string]*polled[HomeState]
 	obs      polled[OBSInfo]
 	audio    map[string]*polled[AudioInfo]
+	meeting  map[string]*polled[MeetingInfo]
 	lang     string
 }
 
@@ -133,6 +134,7 @@ func NewWidgetEngine(metrics Metrics, sources WidgetSources, renderer Renderer, 
 		images:   map[string]cachedImage{},
 		homes:    map[string]*polled[HomeState]{},
 		audio:    map[string]*polled[AudioInfo]{},
+		meeting:  map[string]*polled[MeetingInfo]{},
 		timer:    timerState{duration: defaultTimerMins * time.Minute, remaining: defaultTimerMins * time.Minute},
 	}
 }
@@ -203,6 +205,8 @@ func (e *WidgetEngine) Render(wd deck.Widget, w, h int, bg string, now time.Time
 		return e.renderOBS(wd, w, h, bg, now)
 	case deck.WidgetAudio:
 		return e.renderAudio(wd, w, h, bg, now)
+	case deck.WidgetMeeting:
+		return e.renderMeeting(wd, w, h, bg, now)
 	}
 	return e.renderer.Text(w, h, bg, "", []string{"?"}, false)
 }

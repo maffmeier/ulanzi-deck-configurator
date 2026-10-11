@@ -35,6 +35,9 @@ func (f *fakeSources) OBSStatus() (OBSInfo, error) {
 	return OBSInfo{Scene: "Kamera", Recording: true, RecordTime: "00:01:02"}, nil
 }
 func (f *fakeSources) Cover(string) image.Image { return nil }
+func (f *fakeSources) MeetingState() (MeetingInfo, error) {
+	return MeetingInfo{InMeeting: true, Muted: true, HandRaised: true}, nil
+}
 func (f *fakeSources) AudioState(target string) (AudioInfo, error) {
 	if target == "spotify" {
 		return AudioInfo{AppFound: false}, nil
@@ -205,5 +208,19 @@ func TestAudioWidgets(t *testing.T) {
 	for _, c := range cases {
 		e.Render(c.w, 196, 196, "#000000", time.Now())
 		eventually(t, func() bool { return string(e.Render(c.w, 196, 196, "#000000", time.Now())) == c.want })
+	}
+}
+
+func TestMeetingWidget(t *testing.T) {
+	e := newEngine(&fakeSources{})
+	e.SetLanguage("en")
+	for show, want := range map[string]string{
+		"mute":   "text|#B91C1C|Microphone|[muted]",
+		"camera": "text|#000000|Camera|[off]",
+		"hand":   "text|#A16207|Hand|[raised]",
+	} {
+		w := deck.Widget{Type: deck.WidgetMeeting, Show: show}
+		e.Render(w, 196, 196, "#000000", time.Now())
+		eventually(t, func() bool { return string(e.Render(w, 196, 196, "#000000", time.Now())) == want })
 	}
 }

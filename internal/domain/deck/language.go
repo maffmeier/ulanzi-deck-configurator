@@ -27,6 +27,7 @@ var deckTexts = map[string]map[string]string{
 		"haOffline": "HA offline", "cpu": "CPU", "memory": "RAM", "network": "Netzwerk",
 		"volume": "Lautstärke", "mic": "Mikrofon", "output": "Ausgabe", "muted": "stumm",
 		"micOn": "an", "micOff": "stumm",
+		"noMeeting": "kein Meeting", "camera": "Kamera", "hand": "Hand", "handUp": "gehoben", "on": "an",
 	},
 	"en": {
 		"back": "← Back", "error": "Error", "imageMissing": "Image missing", "timer": "Timer",
@@ -34,5 +35,6 @@ var deckTexts = map[string]map[string]string{
 		"haOffline": "HA offline", "cpu": "CPU", "memory": "RAM", "network": "Network",
 		"volume": "Volume", "mic": "Microphone", "output": "Output", "muted": "muted",
 		"micOn": "on", "micOff": "muted",
+		"noMeeting": "no meeting", "camera": "Camera", "hand": "Hand", "handUp": "raised", "on": "on",
 	},
 }

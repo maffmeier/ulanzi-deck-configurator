@@ -528,8 +528,14 @@
               <input type="password" x-model="secrets.obs_password" :placeholder="secrets.obs_password_set ? t('integrations.stored') : ''" autocomplete="off" /></label>
           </div>
           <p class="hint" x-text="t('integrations.obsHint')"></p>
+          <h4>Microsoft Teams</h4>
+          <div class="row">
+            <span class="test-result" :class="secrets.teams_paired ? 'ok' : ''" x-text="t(secrets.teams_paired ? 'integrations.teamsPaired' : 'integrations.teamsNotPaired')"></span>
+            <button class="ghost" x-show="secrets.teams_paired" @click="secrets.teams_unpair = true; saveSecrets()" x-text="t('integrations.teamsUnpair')"></button>
+          </div>
+          <p class="hint" x-text="t('integrations.teamsHint')"></p>
           <template x-for="(result, name) in secretsTest" :key="name">
-            <p class="test-result" :class="result === 'ok' ? 'ok' : 'err'" x-text="(name === 'obs' ? 'OBS' : 'Home Assistant') + ': ' + (result === 'ok' ? t('integrations.ok') : result)"></p>
+            <p class="test-result" :class="result === 'ok' ? 'ok' : 'err'" x-text="t('integrationName.' + name) + ': ' + (result === 'ok' ? t('integrations.ok') : result)"></p>
           </template>
           <div class="row">
             <button @click="testSecrets()" x-text="t('integrations.test')"></button>
@@ -707,6 +713,19 @@
         <input type="text" x-model="a.target" @input="markDirty()" :placeholder="a.op === 'switch_scene' ? 'Kamera' : 'Mic/Aux'" /></label>
     </div>
   </template>
+  <template x-if="a.type === 'meeting'">
+    <div class="row">
+      <label class="field"><span x-text="t('field.meetingApp')"></span>
+        <select x-model="a.app" @change="meetingAppChanged(a)">
+          <template x-for="app in Object.keys(MEETING_OPS)" :key="app"><option :value="app" x-text="t('meetingApp.' + app)" :selected="app === a.app"></option></template>
+        </select></label>
+      <label class="field"><span x-text="t('field.function')"></span>
+        <select x-model="a.op" @change="markDirty()">
+          <template x-for="o in MEETING_OPS[a.app] || []" :key="o"><option :value="o" x-text="t('meeting.' + o)" :selected="o === a.op"></option></template>
+        </select></label>
+    </div>
+    <p class="hint" x-text="t('meetingHint.' + (a.app || 'teams'))"></p>
+  </template>
   <template x-if="a.type === 'audio'">
     <div class="row">
       <label class="field"><span x-text="t('action.audio')"></span>
@@ -781,6 +800,12 @@
           <template x-for="s in AUDIO_SHOWS" :key="s"><option :value="s" x-text="t('audioShow.' + s)" :selected="s === w.show"></option></template>
         </select></label>
     </template>
+    <template x-if="w.type === 'meeting'">
+      <label class="field"><span x-text="t('field.show')"></span>
+        <select x-model="w.show" @change="markDirty()">
+          <template x-for="s in MEETING_SHOWS" :key="s"><option :value="s" x-text="t('meetingShow.' + s)" :selected="s === w.show"></option></template>
+        </select></label>
+    </template>
     <template x-if="w.type === 'audio' && w.show === 'volume'">
       <label class="field grow"><span x-text="t('field.app')"></span>
         <input type="text" x-model="w.target" @input="markDirty()" :placeholder="t('field.appHint')" /></label>
@@ -834,6 +859,7 @@
   <template x-if="w.type === 'media'"><p class="hint" x-text="t('widgetHint.media')"></p></template>
   <template x-if="w.type === 'obs'"><p class="hint" x-text="t('widgetHint.obs')"></p></template>
   <template x-if="w.type === 'audio'"><p class="hint" x-text="t('widgetHint.audio')"></p></template>
+  <template x-if="w.type === 'meeting'"><p class="hint" x-text="t('widgetHint.meeting')"></p></template>
 </template>
 
 <datalist id="ha-services">

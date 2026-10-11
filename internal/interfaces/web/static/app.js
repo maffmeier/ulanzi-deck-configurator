@@ -11,7 +11,7 @@ const SLOTS = Object.freeze([
 
 const ACTION_TYPES = Object.freeze([
     "none", "shell", "shortcut", "type_text", "url", "http", "switch_page",
-    "predefined_command", "multi", "timer", "audio", "home_assistant", "obs",
+    "predefined_command", "multi", "timer", "audio", "meeting", "home_assistant", "obs",
 ]);
 const PRESS_MODES = Object.freeze(["tap", "repeat", "hold"]);
 const TIMER_OPS = Object.freeze(["toggle", "start", "pause", "reset"]);
@@ -21,9 +21,17 @@ const OBS_OPS = Object.freeze([
 ]);
 const AUDIO_OPS = Object.freeze(["volume_up", "volume_down", "mute", "mic_mute", "output_next", "output_set"]);
 const AUDIO_SHOWS = Object.freeze(["volume", "mic", "output"]);
+// Mirrors deck.MeetingOps.
+const MEETING_OPS = Object.freeze({
+    teams: ["mute", "camera", "hand", "blur", "leave"],
+    zoom: ["mute", "camera", "hand", "share", "leave"],
+    discord: ["mute", "deafen"],
+    meet: ["mute", "camera", "hand"],
+});
+const MEETING_SHOWS = Object.freeze(["mute", "camera", "hand"]);
 const WIDGET_TYPES = Object.freeze([
     { id: "clock" }, { id: "metrics" }, { id: "command" }, { id: "graph" },
-    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "home_assistant" }, { id: "obs" },
+    { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" },
 ]);
 const GRAPH_METRICS = Object.freeze(["cpu", "memory", "network"]);
 const METRICS = Object.freeze(["cpu", "memory", "gpu", "temperature", "disk", "network", "battery"]);
@@ -41,6 +49,7 @@ const ACTION_ICONS = Object.freeze({
     home_assistant: "fa:solid:house",
     obs: "fa:solid:video",
     audio: "fa:solid:volume-high",
+    meeting: "fa:solid:users",
 });
 
 // Presets of the action list; label/hint are i18n keys. The backend's
@@ -91,6 +100,20 @@ const BASE_GROUPS = Object.freeze([
             { id: "audio-mic", key: "audioMic", icon: "fa:solid:microphone-slash", action: { type: "audio", op: "mic_mute" }, live: { type: "audio", show: "mic" } },
             { id: "audio-output", key: "audioOutput", icon: "fa:solid:headphones", action: { type: "audio", op: "output_next" }, live: { type: "audio", show: "output" } },
             { id: "audio-app", key: "audioApp", icon: "fa:solid:sliders", action: { type: "audio", op: "volume_up", step: 5, target: "spotify" }, live: { type: "audio", show: "volume", target: "spotify" }, focus: true },
+        ],
+    },
+    {
+        id: "meeting",
+        items: [
+            { id: "teams-mute", key: "teamsMute", icon: "fa:solid:microphone", action: { type: "meeting", app: "teams", op: "mute" }, live: { type: "meeting", show: "mute" } },
+            { id: "teams-camera", key: "teamsCamera", icon: "fa:solid:video", action: { type: "meeting", app: "teams", op: "camera" }, live: { type: "meeting", show: "camera" } },
+            { id: "teams-hand", key: "teamsHand", icon: "fa:solid:hand", action: { type: "meeting", app: "teams", op: "hand" }, live: { type: "meeting", show: "hand" } },
+            { id: "teams-leave", key: "teamsLeave", icon: "fa:solid:phone-slash", action: { type: "meeting", app: "teams", op: "leave" }, useIcon: true },
+            { id: "zoom-mute", key: "zoomMute", icon: "fa:solid:microphone-slash", action: { type: "meeting", app: "zoom", op: "mute" }, useIcon: true },
+            { id: "zoom-camera", key: "zoomCamera", icon: "fa:solid:video-slash", action: { type: "meeting", app: "zoom", op: "camera" }, useIcon: true },
+            { id: "discord-mute", key: "discordMute", icon: "fa:brands:discord", action: { type: "meeting", app: "discord", op: "mute" }, useIcon: true },
+            { id: "discord-deafen", key: "discordDeafen", icon: "fa:solid:headphones", action: { type: "meeting", app: "discord", op: "deafen" }, useIcon: true },
+            { id: "meet-mute", key: "meetMute", icon: "fa:solid:microphone-slash", action: { type: "meeting", app: "meet", op: "mute" }, useIcon: true },
         ],
     },
     {
@@ -192,7 +215,7 @@ function storedLang() {
 
 window.deckApp = function deckApp() {
     return {
-        INFO_INDEX, FONTS, METRICS, PRESS_MODES, TIMER_OPS, OBS_OPS, GRAPH_METRICS, AUDIO_OPS, AUDIO_SHOWS,
+        INFO_INDEX, FONTS, METRICS, PRESS_MODES, TIMER_OPS, OBS_OPS, GRAPH_METRICS, AUDIO_OPS, AUDIO_SHOWS, MEETING_OPS, MEETING_SHOWS,
         lang: storedLang(),
         previews: {},
         widgetFields: "",
@@ -491,6 +514,7 @@ window.deckApp = function deckApp() {
             if (a.type === "timer" && !TIMER_OPS.includes(a.op)) a.op = "toggle";
             if (a.type === "obs" && !OBS_OPS.includes(a.op)) a.op = "toggle_record";
             if (a.type === "audio" && !AUDIO_OPS.includes(a.op)) a.op = "volume_up";
+            if (a.type === "meeting") this.meetingAppChanged(a);
             if (a.type === "http" && !a.method) a.method = "POST";
             if (a.type === "multi" && !a.steps.length) a.steps = [emptyAction("shell")];
             if (this.cur && a === this.cur.action && !this.pressModeAllowed(this.cur.press)) this.cur.press = "tap";
@@ -504,6 +528,12 @@ window.deckApp = function deckApp() {
             if (mode === "repeat") return type !== "none" && type !== "switch_page";
             if (mode === "hold") return type === "shortcut" || type === "predefined_command";
             return true;
+        },
+
+        meetingAppChanged(a) {
+            if (!MEETING_OPS[a.app]) a.app = "teams";
+            if (!MEETING_OPS[a.app].includes(a.op)) a.op = "mute";
+            this.markDirty();
         },
 
         headersText(a) {
@@ -570,6 +600,7 @@ window.deckApp = function deckApp() {
                 case "home_assistant": return `${a.service} ${a.entity_id}`;
                 case "obs": return `OBS: ${this.t("obs." + a.op)} ${a.target}`;
                 case "audio": return `${this.t("audio." + a.op)} ${a.target}`.trim();
+                case "meeting": return `${this.t("meetingApp." + a.app)}: ${this.t("meeting." + a.op)}`;
             }
             return "";
         },
@@ -1390,7 +1421,7 @@ window.deckApp = function deckApp() {
             this.secretsTest = {};
             try {
                 const res = await fetch("/api/secrets");
-                this.secrets = { ...(await res.json()), home_assistant_token: "", obs_password: "" };
+                this.secrets = { ...(await res.json()), home_assistant_token: "", obs_password: "", mqtt_password: "" };
             } catch (_err) {
                 this.secrets = {};
             }
@@ -1403,7 +1434,7 @@ window.deckApp = function deckApp() {
                 body: JSON.stringify(this.secrets),
             });
             if (res.ok) {
-                this.secrets = { ...(await res.json()), home_assistant_token: "", obs_password: "" };
+                this.secrets = { ...(await res.json()), home_assistant_token: "", obs_password: "", mqtt_password: "" };
                 this.toast(this.t("integrations.saved"), "ok");
             } else {
                 this.toast((await res.json()).detail || this.t("msg.saveFailed"), "err");

@@ -245,7 +245,10 @@ func runCommand(args []string) error {
 
 	dev := d200.NewDevice(d200.OpenHID, log.With("component", "deck"))
 	secrets := integrations.NewSecretStore(integrations.SecretsPath(configPath))
-	integ := integrationRunner{secrets: secrets, obs: integrations.NewOBSClient()}
+	integ := integrationRunner{
+		secrets: secrets, obs: integrations.NewOBSClient(), teams: integrations.NewTeamsClient(secrets, version),
+		runner: runner, log: log.With("component", "integrations"),
+	}
 	engine := application.NewWidgetEngine(reader, widgetSources{runner: runner, integrations: integ}, render.Renderer{}, log.With("component", "widgets"))
 	daemon := application.NewDaemon(dev, runner, reader, render.Renderer{}, engine, cfg, log.With("component", "daemon"))
 

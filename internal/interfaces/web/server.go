@@ -655,6 +655,12 @@ type secretsView struct {
 	OBSURL                string `json:"obs_url"`
 	OBSPassword           string `json:"obs_password"`
 	OBSPasswordSet        bool   `json:"obs_password_set"`
+	TeamsPaired           bool   `json:"teams_paired"`
+	TeamsUnpair           bool   `json:"teams_unpair"`
+	MQTTURL               string `json:"mqtt_url"`
+	MQTTUsername          string `json:"mqtt_username"`
+	MQTTPassword          string `json:"mqtt_password"`
+	MQTTPasswordSet       bool   `json:"mqtt_password_set"`
 }
 
 func (s *Server) getSecrets(w http.ResponseWriter, _ *http.Request) {
@@ -666,6 +672,8 @@ func (s *Server) getSecrets(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, secretsView{
 		HomeAssistantURL: sec.HomeAssistant.URL, HomeAssistantTokenSet: sec.HomeAssistant.Token != "",
 		OBSURL: sec.OBS.URL, OBSPasswordSet: sec.OBS.Password != "",
+		TeamsPaired: sec.Teams.Token != "",
+		MQTTURL:     sec.MQTT.URL, MQTTUsername: sec.MQTT.Username, MQTTPasswordSet: sec.MQTT.Password != "",
 	})
 }
 
@@ -685,6 +693,14 @@ func (s *Server) mergeSecrets(r *http.Request) (integrations.Secrets, error) {
 	}
 	if view.OBSPassword != "" {
 		sec.OBS.Password = view.OBSPassword
+	}
+	if view.TeamsUnpair {
+		sec.Teams.Token = ""
+	}
+	sec.MQTT.URL = strings.TrimSpace(view.MQTTURL)
+	sec.MQTT.Username = strings.TrimSpace(view.MQTTUsername)
+	if view.MQTTPassword != "" {
+		sec.MQTT.Password = view.MQTTPassword
 	}
 	return sec, nil
 }
@@ -725,6 +741,12 @@ func (s *Server) testSecrets(w http.ResponseWriter, r *http.Request) {
 		if _, err := integrations.NewOBSClient().Request(sec.OBS, "GetVersion", nil); err != nil {
 			result["obs"] = err.Error()
 		}
+	}
+	// Teams is only reported when it is in use, it has no URL to configure.
+	if err := integrations.CheckTeams(sec.Teams.Token); err == nil {
+		result["teams"] = "ok"
+	} else if sec.Teams.Token != "" {
+		result["teams"] = err.Error()
 	}
 	writeJSON(w, http.StatusOK, result)
 }

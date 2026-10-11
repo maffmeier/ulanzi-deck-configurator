@@ -19,7 +19,11 @@ const (
 	WidgetHome    WidgetType = "home_assistant"
 	WidgetOBS     WidgetType = "obs"
 	WidgetAudio   WidgetType = "audio"
+	WidgetMeeting WidgetType = "meeting"
 )
+
+// MeetingShows are the Teams states a meeting widget can display.
+var MeetingShows = []string{"mute", "camera", "hand"}
 
 // AudioShows are the things an audio widget can display.
 var AudioShows = []string{"volume", "mic", "output"}
@@ -137,6 +141,13 @@ func (w *Widget) Normalize(onKey bool) error {
 		if err := normalizeColors(w); err != nil {
 			return err
 		}
+	case WidgetMeeting:
+		if w.Show == "" {
+			w.Show = "mute"
+		}
+		if !slices.Contains(MeetingShows, w.Show) {
+			return fmt.Errorf("meeting widget shows mute, camera or hand, got %q", w.Show)
+		}
 	case WidgetTimer, WidgetMedia:
 	default:
 		return fmt.Errorf("unknown widget type %q", w.Type)
@@ -172,6 +183,8 @@ func (w Widget) Clean() Widget {
 		clean.Title, clean.EntityID, clean.Attribute, clean.ActiveState = w.Title, w.EntityID, w.Attribute, w.ActiveState
 		clean.OkColor, clean.FailColor, clean.IntervalS = w.OkColor, w.FailColor, w.IntervalS
 	case WidgetOBS:
+		clean.Title, clean.Show = w.Title, w.Show
+	case WidgetMeeting:
 		clean.Title, clean.Show = w.Title, w.Show
 	case WidgetAudio:
 		clean.Title, clean.Show, clean.OkColor, clean.FailColor = w.Title, w.Show, w.OkColor, w.FailColor
