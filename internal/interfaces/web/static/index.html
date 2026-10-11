@@ -46,6 +46,7 @@
         <button @click="open = false; editor.default_page = currentPage; markDirty()" :disabled="editor.default_page === currentPage" x-text="t('page.makeDefault')"></button>
         <button @click="open = false; movePage(-1)" :disabled="pageNames().indexOf(currentPage) === 0" x-text="t('page.moveLeft')"></button>
         <button @click="open = false; movePage(1)" :disabled="pageNames().indexOf(currentPage) === pageNames().length - 1" x-text="t('page.moveRight')"></button>
+        <button @click="open = false; exportProfile(currentPage)" x-text="t('profile.exportPage')"></button>
         <hr />
         <button class="danger" @click="open = false; removePage()" :disabled="editor.pages.length <= 1" x-text="t('page.delete')"></button>
       </div>
@@ -476,6 +477,12 @@
               <option value="de">Deutsch</option><option value="en">English</option>
             </select></label>
           <label class="check"><input type="checkbox" x-model="saveBundle" /> <span x-text="t('settings.saveBundle')"></span></label>
+          <h4 x-text="t('profile.title')"></h4>
+          <p class="hint" x-text="t('profile.hint')"></p>
+          <div class="row">
+            <button @click="exportProfile()" x-text="t('profile.exportDeck')"></button>
+            <button @click="$refs.importFile.click()" x-text="t('profile.import')"></button>
+          </div>
           <div class="file-info"><span x-text="t('inspector.config')"></span><code x-text="editor.path"></code></div>
         </div>
       </template>
@@ -534,6 +541,27 @@
   </div>
 </div>
 
+<!-- ───────────── Import ───────────── -->
+<div class="modal" x-show="importDialog.open" x-cloak x-transition.opacity @keydown.escape.window="importDialog.open = false">
+  <div class="modal-box small" @click.outside="importDialog.open = false">
+    <header><h3 x-text="t('profile.importTitle')"></h3><button class="icon-btn" @click="importDialog.open = false">✕</button></header>
+    <div class="modal-body" x-show="importDialog.data">
+      <p x-text="t('profile.importText', { name: importDialog.name })"></p>
+      <div class="chips">
+        <template x-for="p in importDialog.data?.pages || []" :key="p.name">
+          <span class="chip" x-text="`${p.name} · ${p.buttons.length}`"></span>
+        </template>
+      </div>
+      <p class="hint" x-text="t('profile.importHint')"></p>
+    </div>
+    <footer class="modal-actions">
+      <button class="ghost" @click="importDialog.open = false" x-text="t('common.cancel')"></button>
+      <button @click="importReplace()" x-text="t('profile.replace')"></button>
+      <button class="primary" @click="importPages()" x-text="t('profile.addPages')"></button>
+    </footer>
+  </div>
+</div>
+
 <!-- ───────────── Versions ───────────── -->
 <div class="modal" x-show="versions.open" x-cloak x-transition.opacity @keydown.escape.window="versions.open = false">
   <div class="modal-box small" @click.outside="versions.open = false">
@@ -582,6 +610,7 @@
   </div>
 </div>
 
+<input type="file" accept=".deckprofile,.zip" x-ref="importFile" hidden @change="importProfile($event.target.files[0]); $event.target.value = ''" />
 <input type="file" accept="image/*" x-ref="upload" hidden @change="uploadIcon($event.target.files[0]); $event.target.value = ''" />
 
 <!-- ───────────── Toasts ───────────── -->

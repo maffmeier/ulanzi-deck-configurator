@@ -209,6 +209,7 @@ window.deckApp = function deckApp() {
         history: { past: [], future: [], last: "", saved: "" },
         historyTimer: null,
         versions: { open: false, items: [] },
+        importDialog: { open: false, name: "", data: null },
 
         get shellPlaceholder() {
             if (navigator.platform.startsWith("Win")) return "start notepad";
@@ -638,6 +639,74 @@ window.deckApp = function deckApp() {
             const id = Date.now() + Math.random();
             this.toasts.push({ id, text, kind });
             setTimeout(() => { this.toasts = this.toasts.filter((x) => x.id !== id); }, ms);
+        },
+
+        // ───────────── Export & import ─────────────
+
+        // Export works on the saved file, so unsaved edits are saved first.
+        async exportProfile(page = "") {
+            if (this.dirty) {
+                if (!confirm(this.t("profile.saveFirst"))) return;
+                await this.save();
+                if (this.dirty) return;
+            }
+            const link = document.createElement("a");
+            link.href = page ? `/api/export?page=${encodeURIComponent(page)}` : "/api/export";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        },
+
+        async importProfile(file) {
+            if (!file) return;
+            const form = new FormData();
+            form.append("file", file);
+            try {
+                const res = await fetch("/api/import", { method: "POST", body: form });
+                const payload = await res.json();
+                if (!res.ok) throw new Error(payload.detail || this.t("profile.importFailed"));
+                this.importDialog = { open: true, name: file.name, data: this.normalizeEditor(payload) };
+                this.settings.open = false;
+            } catch (err) {
+                this.toast(err.message, "err", 8000);
+            }
+        },
+
+        // Imported pages get free names; keys on pinned positions are dropped
+        // because pinned keys win on every page.
+        importPages() {
+            const data = this.importDialog.data;
+            const renamed = {};
+            let dropped = 0;
+            for (const p of data.pages) {
+                renamed[p.name] = this.uniquePageName(p.name);
+                const buttons = p.buttons.filter((b) => !this.isFixed(b.index));
+                dropped += p.buttons.length - buttons.length;
+                this.editor.pages.push({ ...p, name: renamed[p.name], buttons });
+            }
+            const retarget = (a) => {
+                if (!a) return;
+                if (a.type === "switch_page" && renamed[a.page]) a.page = renamed[a.page];
+                (a.steps || []).forEach(retarget);
+            };
+            for (const p of data.pages) {
+                const page = this.editor.pages.find((x) => x.name === renamed[p.name]);
+                page.buttons.forEach((b) => { retarget(b.action); retarget(b.long_press); retarget(b.toggle?.action); });
+            }
+            this.currentPage = renamed[data.pages[0].name];
+            this.selected = null;
+            this.importDialog.open = false;
+            this.markDirty();
+            this.toast(this.t(dropped ? "profile.importedDropped" : "profile.imported", { n: data.pages.length, dropped }), "ok", 6000);
+        },
+
+        importReplace() {
+            this.editor = { ...this.importDialog.data, path: this.editor.path };
+            this.currentPage = this.editor.default_page;
+            this.selected = null;
+            this.importDialog.open = false;
+            this.markDirty();
+            this.toast(this.t("profile.replaced"), "ok");
         },
 
         // ───────────── Pages ─────────────

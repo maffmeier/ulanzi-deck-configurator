@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"mime"
@@ -63,6 +64,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/config", s.putConfig)
 	mux.HandleFunc("POST /api/config/validate", s.validateConfig)
 	mux.HandleFunc("GET /api/backups", s.listBackups)
+	mux.HandleFunc("GET /api/export", s.exportProfile)
+	mux.HandleFunc("POST /api/import", s.importProfile)
 	mux.HandleFunc("POST /api/backups/{name}/restore", s.restoreBackup)
 	mux.HandleFunc("GET /api/small-window/preview", s.smallWindowPreview)
 	mux.HandleFunc("GET /api/temperature-sensors", s.temperatureSensors)
@@ -380,6 +383,67 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toEditorConfig(cfg, s.ConfigPath, true))
+}
+
+// exportProfile downloads the saved config (or one page of it) with its
+// images as a .deckprofile file.
+func (s *Server) exportProfile(w http.ResponseWriter, r *http.Request) {
+	cfg, err := configfile.Load(s.ConfigPath)
+	if err != nil {
+		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	page := r.URL.Query().Get("page")
+	data, err := configfile.ExportProfile(cfg, page)
+	if err != nil {
+		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	name := "ulanzi-deck"
+	if page != "" {
+		name = strings.Trim(unsafeFilename.ReplaceAllString(page, "-"), ".-")
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name + configfile.ProfileExt}))
+	_, _ = w.Write(data)
+}
+
+// importProfile unpacks the images of an uploaded profile next to the
+// config and returns its layout; the editor merges it and the user saves.
+func (s *Server) importProfile(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	stem := strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename))
+	stem = strings.Trim(unsafeFilename.ReplaceAllString(stem, "-"), ".-")
+	if stem == "" {
+		stem = "profile"
+	}
+	dir := filepath.Join(s.configDir(), "icons", "imported", stem)
+	for i := 2; fileExists(dir); i++ {
+		dir = filepath.Join(s.configDir(), "icons", "imported", stem+"-"+strconv.Itoa(i))
+	}
+	cfg, err := configfile.ImportProfile(data, dir)
+	if err != nil {
+		os.RemoveAll(dir)
+		writeDetail(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, toEditorConfig(cfg, s.ConfigPath, true))
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (s *Server) smallWindowPreview(w http.ResponseWriter, r *http.Request) {

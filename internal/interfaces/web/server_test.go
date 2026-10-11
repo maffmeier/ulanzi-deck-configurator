@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -228,5 +229,29 @@ func TestBackupsListAndRestore(t *testing.T) {
 	}
 	if rec := do(t, h, "POST", "/api/backups/secrets.yaml/restore", nil); rec.Code != 404 {
 		t.Fatalf("foreign name: %d", rec.Code)
+	}
+}
+
+func TestExportImportProfile(t *testing.T) {
+	s, h := newTestServer(t)
+	os.WriteFile(s.ConfigPath, []byte("default_page: main\npages:\n  main:\n    buttons:\n      - {index: 0, label: Eins}\n  zwei:\n    buttons: []\n"), 0o644)
+	rec := do(t, h, "GET", "/api/export?page=main", nil)
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Content-Disposition"), "main.deckprofile") {
+		t.Fatalf("export: %d %v", rec.Code, rec.Header())
+	}
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	fw, _ := mw.CreateFormFile("file", "main.deckprofile")
+	fw.Write(rec.Body.Bytes())
+	mw.Close()
+	req := httptest.NewRequest("POST", "http://127.0.0.1:8765/api/import", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	res := httptest.NewRecorder()
+	h.ServeHTTP(res, req)
+	var imported editorConfig
+	_ = json.Unmarshal(res.Body.Bytes(), &imported)
+	if res.Code != 200 || len(imported.Pages) != 1 || imported.Pages[0].Buttons[0].Label != "Eins" {
+		t.Fatalf("import: %d %s", res.Code, res.Body)
 	}
 }
