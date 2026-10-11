@@ -429,3 +429,7 @@ input[type=time], input[type=password] {
 .versions li span:first-child { flex: 1; font-variant-numeric: tabular-nums; }
 .versions small { opacity: .6; }
 .badge-current { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(60,207,145,.18); color: var(--ok); }
+
+/* Automations */
+.trigger-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; display: grid; gap: 8px; background: var(--panel-2); }
+.trigger-card .row { align-items: flex-end; }

@@ -146,6 +146,8 @@ func (d *Daemon) Run(ctx context.Context) {
 	wg.Go(func() { d.liveLoop(ctx) })
 	wg.Go(func() { d.displayLoop(ctx) })
 	wg.Go(func() { d.appLoop(ctx) })
+	wg.Go(func() { d.triggerLoop(ctx) })
+	d.fire(deck.TriggerStartup, nil)
 	wg.Wait()
 }
 
@@ -266,6 +268,7 @@ func (d *Daemon) eventLoop(ctx context.Context) {
 				if e.Connected {
 					// The status loop restarts its mode handshake.
 					d.poke()
+					d.fire(deck.TriggerConnect, nil)
 				} else {
 					// A release may never arrive; don't leave keys stuck.
 					d.releaseAll()

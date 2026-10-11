@@ -123,6 +123,14 @@ type outPage struct {
 	Buttons   []outButton `yaml:"buttons"`
 }
 
+type outTrigger struct {
+	Event  string    `yaml:"event"`
+	At     string    `yaml:"at,omitempty"`
+	Days   []string  `yaml:"days,omitempty,flow"`
+	App    string    `yaml:"app,omitempty"`
+	Action outAction `yaml:"action"`
+}
+
 type outConfig struct {
 	DefaultPage  string         `yaml:"default_page"`
 	Brightness   *int           `yaml:"brightness,omitempty"`
@@ -131,6 +139,7 @@ type outConfig struct {
 	SmallWindow  outSmallWindow `yaml:"small_window"`
 	Pages        yaml.Node      `yaml:"pages"`
 	FixedButtons []outButton    `yaml:"fixed_buttons,omitempty"`
+	Triggers     []outTrigger   `yaml:"triggers,omitempty"`
 }
 
 // Marshal renders a config in canonical form: page order is preserved,
@@ -177,6 +186,9 @@ func Marshal(cfg *deck.Config) ([]byte, error) {
 			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: page.Name}, &value)
 	}
 	out.FixedButtons = outButtons(cfg.FixedButtons)
+	for _, t := range cfg.Triggers {
+		out.Triggers = append(out.Triggers, outTrigger{Event: t.Event, At: t.At, Days: t.Days, App: t.App, Action: *toOutAction(&t.Action)})
+	}
 
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

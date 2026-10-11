@@ -459,6 +459,7 @@
       <nav class="tabs">
         <button :class="{ active: settings.tab === 'general' }" @click="settings.tab = 'general'" x-text="t('settings.general')"></button>
         <button :class="{ active: settings.tab === 'display' }" @click="settings.tab = 'display'" x-text="t('settings.display')"></button>
+        <button :class="{ active: settings.tab === 'automations' }" @click="openAutomations()" x-text="t('settings.automations')"></button>
         <button :class="{ active: settings.tab === 'integrations' }" @click="settings.tab = 'integrations'; loadSecrets()" x-text="t('settings.integrations')"></button>
       </nav>
       <button class="icon-btn" @click="settings.open = false">✕</button>
@@ -507,6 +508,44 @@
           </div>
           <label class="check"><input type="checkbox" x-model="editor.display.press_feedback" @change="markDirty()" /> <span x-text="t('display.pressFeedback')"></span></label>
           <p class="hint" x-text="t('display.pressFeedbackHint')"></p>
+          <p class="hint" x-text="t('display.saveHint')"></p>
+        </div>
+      </template>
+      <template x-if="settings.tab === 'automations'">
+        <div class="settings-section">
+          <p class="hint" x-text="t('automation.hint')"></p>
+          <template x-for="(trigger, ti) in editor.triggers" :key="ti">
+            <div class="trigger-card">
+              <div class="row">
+                <label class="field"><span x-text="t('automation.when')"></span>
+                  <select x-model="trigger.event" @change="markDirty()">
+                    <template x-for="ev in TRIGGER_EVENTS" :key="ev"><option :value="ev" x-text="t('trigger.' + ev)" :selected="ev === trigger.event"></option></template>
+                  </select></label>
+                <label class="field" x-show="trigger.event === 'time'"><span x-text="t('automation.at')"></span>
+                  <input type="time" x-model="trigger.at" @input="markDirty()" /></label>
+                <label class="field grow" x-show="trigger.event === 'app'"><span x-text="t('field.app')"></span>
+                  <input type="text" x-model="trigger.app" @input="markDirty()" placeholder="obs" /></label>
+                <button class="icon-btn danger" @click="removeTrigger(ti)" :title="t('common.remove')">✕</button>
+              </div>
+              <div class="chips" x-show="trigger.event === 'time'">
+                <template x-for="day in WEEKDAYS" :key="day">
+                  <button class="chip" :class="{ on: trigger.days.includes(day) }" @click="toggleDay(trigger, day)" x-text="t('day.' + day)"></button>
+                </template>
+                <span class="hint" x-show="!trigger.days.length" x-text="t('automation.everyDay')"></span>
+              </div>
+              <div class="chips" x-show="trigger.event === 'app' && recentApps.length">
+                <template x-for="app in recentApps" :key="app"><button class="chip" @click="trigger.app = app; markDirty()" x-text="app"></button></template>
+              </div>
+              <label class="field"><span x-text="t('automation.then')"></span>
+                <select x-model="trigger.action.type" @change="actionTypeChanged(trigger.action)">
+                  <template x-for="type in triggerActionTypes()" :key="type"><option :value="type" x-text="t('action.' + type)" :selected="type === trigger.action.type"></option></template>
+                </select></label>
+              <template x-for="a in [trigger.action]" :key="'trigger-' + ti">
+                <div class="action-fields" x-html="actionFields"></div>
+              </template>
+            </div>
+          </template>
+          <button @click="addTrigger()" x-text="t('automation.add')"></button>
           <p class="hint" x-text="t('display.saveHint')"></p>
         </div>
       </template>

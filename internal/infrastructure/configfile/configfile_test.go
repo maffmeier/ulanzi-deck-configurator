@@ -293,3 +293,31 @@ pages:
 		t.Fatalf("folder lost:\n%s", data)
 	}
 }
+
+func TestTriggersRoundTrip(t *testing.T) {
+	text := `pages:
+  main:
+    buttons: []
+triggers:
+  - {event: time, at: "18:00", days: [mon, fri], action: {type: switch_page, page: main}}
+  - {event: app, app: obs, action: {type: obs, op: start_record}}
+`
+	cfg, err := Parse([]byte(text), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := Parse(out, ".")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(again.Triggers) != 2 || again.Triggers[0].At != "18:00" || again.Triggers[1].Action.Op != "start_record" {
+		t.Fatalf("triggers %+v\n%s", again.Triggers, out)
+	}
+	if _, err := Parse([]byte("pages:\n  main:\n    buttons: []\ntriggers:\n  - {event: time, at: noon, action: {type: shell, cmd: x}}\n"), "."); err == nil {
+		t.Fatal("invalid trigger must fail")
+	}
+}

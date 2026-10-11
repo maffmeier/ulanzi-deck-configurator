@@ -124,6 +124,14 @@ type rawDisplay struct {
 	} `yaml:"night"`
 }
 
+type rawTrigger struct {
+	Event  string    `yaml:"event"`
+	At     string    `yaml:"at"`
+	Days   []string  `yaml:"days"`
+	App    string    `yaml:"app"`
+	Action rawAction `yaml:"action"`
+}
+
 type rawConfig struct {
 	DefaultPage  string          `yaml:"default_page"`
 	Brightness   *int            `yaml:"brightness"`
@@ -133,6 +141,7 @@ type rawConfig struct {
 	Pages        yaml.Node       `yaml:"pages"`
 	FixedButtons []rawButton     `yaml:"fixed_buttons"`
 	Buttons      []rawButton     `yaml:"buttons"`
+	Triggers     []rawTrigger    `yaml:"triggers"`
 }
 
 // Load parses the YAML file at path.
@@ -160,6 +169,10 @@ func Parse(data []byte, baseDir string) (*deck.Config, error) {
 		if d.Night != nil {
 			cfg.Display.Night = &deck.NightMode{From: d.Night.From, To: d.Night.To, Brightness: d.Night.Brightness}
 		}
+	}
+
+	for _, t := range raw.Triggers {
+		cfg.Triggers = append(cfg.Triggers, deck.Trigger{Event: t.Event, At: t.At, Days: t.Days, App: t.App, Action: toAction(t.Action)})
 	}
 
 	sw, err := parseSmallWindow(raw.SmallWindow, baseDir)

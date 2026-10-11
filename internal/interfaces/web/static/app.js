@@ -29,6 +29,8 @@ const MEETING_OPS = Object.freeze({
     meet: ["mute", "camera", "hand"],
 });
 const MEETING_SHOWS = Object.freeze(["mute", "camera", "hand"]);
+const TRIGGER_EVENTS = Object.freeze(["time", "startup", "connect", "lock", "unlock", "app"]);
+const WEEKDAYS = Object.freeze(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
 const WIDGET_TYPES = Object.freeze([
     { id: "clock" }, { id: "metrics" }, { id: "command" }, { id: "graph" },
     { id: "image", infoOnly: true }, { id: "timer" }, { id: "media" }, { id: "audio" }, { id: "meeting" }, { id: "home_assistant" }, { id: "obs" }, { id: "mqtt" },
@@ -218,7 +220,7 @@ function storedLang() {
 
 window.deckApp = function deckApp() {
     return {
-        INFO_INDEX, FONTS, METRICS, PRESS_MODES, TIMER_OPS, OBS_OPS, GRAPH_METRICS, AUDIO_OPS, AUDIO_SHOWS, MEETING_OPS, MEETING_SHOWS,
+        INFO_INDEX, FONTS, METRICS, PRESS_MODES, TIMER_OPS, OBS_OPS, GRAPH_METRICS, AUDIO_OPS, AUDIO_SHOWS, MEETING_OPS, MEETING_SHOWS, TRIGGER_EVENTS, WEEKDAYS,
         lang: storedLang(),
         previews: {},
         widgetFields: "",
@@ -324,6 +326,9 @@ window.deckApp = function deckApp() {
                     night_from: "22:00", night_to: "07:00", night_brightness: 20, press_feedback: false, ...(payload.display || {}),
                 },
                 fixed_buttons: (payload.fixed_buttons || []).map(normalizeButton),
+                triggers: (payload.triggers || []).map((t) => ({
+                    event: t.event, at: t.at || "08:00", days: t.days || [], app: t.app || "", action: normalizeAction(t.action),
+                })),
                 small_window: {
                     enabled: Boolean(sw.enabled),
                     interval_s: sw.interval_s || 2,
@@ -386,6 +391,7 @@ window.deckApp = function deckApp() {
                     night_brightness: Number(this.editor.display.night_brightness) || 0,
                 },
                 fixed_buttons: this.serializeButtons(this.editor.fixed_buttons),
+                triggers: this.editor.triggers.map((t) => ({ ...t, action: this.serializeAction(t.action) || { type: "none" } })),
                 small_window: {
                     ...sw,
                     widgets: sw.widgets.map((w) => ({ ...w, interval_s: Number(w.interval_s) })),
@@ -1413,6 +1419,37 @@ window.deckApp = function deckApp() {
             const items = this.editor.small_window.temperature_sensors;
             this.editor.small_window.temperature_sensors = items.includes(id) ? items.filter((s) => s !== id) : [...items, id];
             this.markDirty();
+        },
+
+        // ───────────── Automations ─────────────
+
+        addTrigger() {
+            this.editor.triggers.push({ event: "time", at: "08:00", days: [], app: "", action: emptyAction("switch_page") });
+            this.actionTypeChanged(this.editor.triggers[this.editor.triggers.length - 1].action);
+        },
+
+        removeTrigger(i) {
+            this.editor.triggers.splice(i, 1);
+            this.markDirty();
+        },
+
+        toggleDay(trigger, day) {
+            trigger.days = trigger.days.includes(day) ? trigger.days.filter((d) => d !== day) : [...trigger.days, day];
+            this.markDirty();
+        },
+
+        async openAutomations() {
+            this.settings = { open: true, tab: "automations" };
+            try {
+                const res = await fetch("/api/desktop/recent-apps");
+                this.recentApps = res.ok ? (await res.json()).items || [] : [];
+            } catch (_err) {
+                this.recentApps = [];
+            }
+        },
+
+        triggerActionTypes() {
+            return ACTION_TYPES.filter((t) => t !== "none");
         },
 
         // ───────────── Settings & integrations ─────────────

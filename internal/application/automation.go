@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"time"
+
+	"github.com/maffmeier/ulanzi-deck-configurator/internal/domain/deck"
 )
 
 // DesktopState reports host state for display and page automation.
@@ -52,7 +54,8 @@ func (d *Daemon) displayLoop(ctx context.Context) {
 				lastLockCheck = now
 				if locked, err := d.desktop.Locked(); err == nil {
 					d.mu.Lock()
-					if locked != d.locked {
+					changed := locked != d.locked
+					if changed {
 						d.log.Info("screen lock changed", "locked", locked)
 						if !locked {
 							// Coming back counts as activity.
@@ -61,6 +64,11 @@ func (d *Daemon) displayLoop(ctx context.Context) {
 					}
 					d.locked = locked
 					d.mu.Unlock()
+					if changed && locked {
+						d.fire(deck.TriggerLock, nil)
+					} else if changed {
+						d.fire(deck.TriggerUnlock, nil)
+					}
 				}
 			}
 			d.updateBrightness(now)
@@ -79,11 +87,12 @@ func (d *Daemon) appLoop(ctx context.Context) {
 	for {
 		d.mu.Lock()
 		enabled := d.cfg.UsesAppPages()
+		triggers := len(d.cfg.TriggersFor(deck.TriggerApp)) > 0
 		d.mu.Unlock()
 		// Without app pages we only feed the "recently active" list of the
 		// editor, so a slower poll is enough.
 		wait := appInterval
-		if !enabled {
+		if !enabled && !triggers {
 			wait = 3 * appInterval
 		}
 		select {
@@ -104,6 +113,7 @@ func (d *Daemon) appLoop(ctx context.Context) {
 		if enabled {
 			d.followApp(app)
 		}
+		d.fire(deck.TriggerApp, func(t deck.Trigger) bool { return t.MatchesApp(app) })
 	}
 }
 

@@ -250,3 +250,29 @@ func TestAudioActionValidation(t *testing.T) {
 		t.Fatalf("clean %+v", clean)
 	}
 }
+
+func TestTriggerTiming(t *testing.T) {
+	tr := Trigger{Event: TriggerTime, At: "18:30", Days: []string{"mon", "fri"}, Action: Action{Type: ActionShell, Cmd: "x"}}
+	if err := tr.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	monday := time.Date(2026, 10, 12, 18, 30, 40, 0, time.Local)
+	if !tr.DueAt(monday) || tr.DueAt(monday.Add(time.Minute)) || tr.DueAt(monday.AddDate(0, 0, 1)) {
+		t.Fatal("due only on the listed days in that minute")
+	}
+	for _, bad := range []Trigger{
+		{Event: TriggerTime, At: "25:00", Action: tr.Action},
+		{Event: TriggerTime, At: "08:00", Days: []string{"montag"}, Action: tr.Action},
+		{Event: TriggerApp, Action: tr.Action},
+		{Event: "reboot", Action: tr.Action},
+		{Event: TriggerStartup, Action: Action{Type: ActionShell}},
+	} {
+		if bad.Validate() == nil {
+			t.Fatalf("%+v must fail", bad)
+		}
+	}
+	app := Trigger{Event: TriggerApp, App: "obs"}
+	if !app.MatchesApp("com.obsproject.Studio") || app.MatchesApp("code") {
+		t.Fatal("app match")
+	}
+}

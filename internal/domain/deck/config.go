@@ -297,6 +297,7 @@ type Config struct {
 	// Language of texts shown on the deck ("de", "en" or empty for the
 	// system language).
 	Language string
+	Triggers []Trigger
 }
 
 func (c *Config) Validate() error {
@@ -322,6 +323,11 @@ func (c *Config) Validate() error {
 	}
 	if c.Language != "" && c.Language != "de" && c.Language != "en" {
 		return fmt.Errorf("language must be de or en, got %q", c.Language)
+	}
+	for i, t := range c.Triggers {
+		if err := t.Validate(); err != nil {
+			return fmt.Errorf("trigger %d: %w", i+1, err)
+		}
 	}
 	// Overlapping indices would silently shadow each other.
 	fixed := map[int]bool{}

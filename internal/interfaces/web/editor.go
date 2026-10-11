@@ -124,6 +124,14 @@ type editorSmallWindow struct {
 	Widgets              []editorWidget `json:"widgets"`
 }
 
+type editorTrigger struct {
+	Event  string       `json:"event"`
+	At     string       `json:"at"`
+	Days   []string     `json:"days"`
+	App    string       `json:"app"`
+	Action editorAction `json:"action"`
+}
+
 type editorConfig struct {
 	Path                    string            `json:"path"`
 	ConfigExists            bool              `json:"config_exists"`
@@ -134,6 +142,7 @@ type editorConfig struct {
 	Pages                   []editorPage      `json:"pages"`
 	FixedButtons            []editorButton    `json:"fixed_buttons"`
 	SmallWindow             editorSmallWindow `json:"small_window"`
+	Triggers                []editorTrigger   `json:"triggers"`
 	VersionedConfigPath     *string           `json:"versioned_config_path"`
 	SavedFirmwareBundlePath *string           `json:"saved_firmware_bundle_path"`
 }
@@ -146,6 +155,7 @@ type editorPutRequest struct {
 	Pages              []editorPage      `json:"pages"`
 	FixedButtons       []editorButton    `json:"fixed_buttons"`
 	SmallWindow        editorSmallWindow `json:"small_window"`
+	Triggers           []editorTrigger   `json:"triggers"`
 	SaveFirmwareBundle bool              `json:"save_firmware_bundle"`
 }
 
@@ -366,6 +376,10 @@ func toEditorConfig(cfg *deck.Config, path string, exists bool) editorConfig {
 	}
 	for _, b := range cfg.FixedButtons {
 		ec.FixedButtons = append(ec.FixedButtons, toEditorButton(b))
+	}
+	ec.Triggers = []editorTrigger{}
+	for _, t := range cfg.Triggers {
+		ec.Triggers = append(ec.Triggers, editorTrigger{Event: t.Event, At: t.At, Days: nonNil(t.Days), App: t.App, Action: toEditorAction(t.Action)})
 	}
 	return ec
 }
@@ -593,6 +607,26 @@ func fromEditor(req editorPutRequest) ([]byte, error) {
 			return nil, fmt.Errorf("Infofenster, Widget %d: %w", i+1, err)
 		}
 		cfg.SmallWindow.Widgets = append(cfg.SmallWindow.Widgets, w)
+	}
+	for i, et := range req.Triggers {
+		action, err := fromEditorAction(et.Action)
+		if err != nil {
+			return nil, fmt.Errorf("Automation %d: %w", i+1, err)
+		}
+		if action == nil {
+			return nil, fmt.Errorf("Automation %d: keine Aktion gewählt", i+1)
+		}
+		t := deck.Trigger{Event: et.Event, Action: *action}
+		switch et.Event {
+		case deck.TriggerTime:
+			t.At, t.Days = et.At, et.Days
+		case deck.TriggerApp:
+			t.App = strings.TrimSpace(et.App)
+		}
+		if err := t.Validate(); err != nil {
+			return nil, fmt.Errorf("Automation %d: %w", i+1, err)
+		}
+		cfg.Triggers = append(cfg.Triggers, t)
 	}
 	return configfile.Marshal(cfg)
 }
