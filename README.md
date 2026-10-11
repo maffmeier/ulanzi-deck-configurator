@@ -11,21 +11,29 @@ Abhängigkeiten.
 - Tasten mit Icons oder Text, beliebig viele Seiten, feste Tasten auf allen Seiten
 - Aktionen: Befehl ausführen, Tastenkürzel, Text tippen, Website öffnen,
   HTTP-Request/Webhook, Seite wechseln (inkl. „nächste“/„vorherige“ Seite),
-  Medien- und Lautstärketasten, Home Assistant, OBS
+  Medientasten, Audio (Lautstärke auch je Anwendung, Mikrofon,
+  Ausgabegerät), Meeting-Tasten (Teams, Zoom, Discord, Meet), Home
+  Assistant, OBS, MQTT und eigene Plugins
 - Mehrfachaktionen (Makros) mit Pausen, Umschalttasten mit zwei Zuständen,
   Ordner mit automatischer Zurück-Taste
 - Seiten wechseln automatisch je nach aktiver Anwendung
 - Display-Automatik: dimmen nach Inaktivität, Nachtmodus, aus bei
   gesperrtem Bildschirm
+- Automationen: Aktionen zu einer Uhrzeit, beim Start, beim Sperren oder
+  wenn eine Anwendung aktiv wird
+- Mehrere Decks gleichzeitig, mit gemeinsamer oder eigener Konfiguration
 - Tastenverhalten pro Taste: langer Druck als Zweitaktion, Wiederholen
   solange gehalten, oder Kürzel gedrückt halten (Push-to-Talk)
 - Infofenster: Uhr, CPU/RAM der Firmware oder eigene Messwerte
   (CPU, RAM, GPU, Temperatur, Festplatte, Netzwerk, Akku)
 - Widgets im Infofenster und als Live-Anzeige auf Tasten: Befehlsausgabe
   (mit Farbe je Exit-Code), Verlaufsgrafik, Bild/Diashow, Timer,
-  „läuft gerade“ mit Cover
-- Web-Editor im Stil der Stream-Deck-Software mit Drag & Drop und
-  eingebautem Icon-Katalog (Font Awesome Free + Twemoji)
+  „läuft gerade“ mit Cover, nächster Termin, Audio- und Teams-Status,
+  MQTT-Werte
+- Animierte GIF-Icons, optional sichtbarer Tastendruck
+- Web-Editor im Stil der Stream-Deck-Software mit Drag & Drop,
+  eingebautem Icon-Katalog (Font Awesome Free + Twemoji), Rückgängig,
+  gespeicherten Versionen sowie Export/Import von Seiten als Profil
 - Oberfläche und Gerätetexte auf Deutsch und Englisch (automatisch, umschaltbar)
 - Tray-Icon, Autostart, automatische Wiederverbindung nach dem Abstecken
 - Änderungen an der `deck.yaml` werden ohne Neustart übernommen
@@ -192,6 +200,8 @@ Zugangsdaten stehen nicht in der `deck.yaml`, sondern in einer eigenen
 ```yaml
 home_assistant: {url: "http://homeassistant.local:8123", token: "<Long-Lived Access Token>"}
 obs: {url: "ws://127.0.0.1:4455", password: "<obs-websocket-Passwort>"}
+mqtt: {url: "mqtt://homeassistant.local:1883", username: deck, password: "<Passwort>"}
+teams: {token: "<setzt Teams bei der Kopplung>"}
 ```
 
 ```yaml
@@ -212,6 +222,134 @@ als Quelle), `toggle_replay_buffer`, `save_replay`. OBS braucht
 obs-websocket 5 (ab OBS 28 eingebaut). Home-Assistant-Widgets zeigen den
 Zustand oder ein Attribut (`attribute`) und färben die Taste bei
 `active_state` (Standard `on`).
+
+### Audio
+
+```yaml
+- index: 0
+  action: {type: audio, op: volume_up, step: 5}            # volume_down, mute
+  live: {type: audio, show: volume}
+- index: 1                                                 # nur Spotify lauter/leiser
+  action: {type: audio, op: volume_up, target: spotify}
+  live: {type: audio, show: volume, target: spotify}
+- index: 2                                                 # rot, solange das Mikrofon stumm ist
+  action: {type: audio, op: mic_mute}
+  live: {type: audio, show: mic}
+- index: 3                                                 # Lautsprecher ↔ Headset
+  action: {type: audio, op: output_next}                   # output_set mit target: Headset
+  live: {type: audio, show: output}
+```
+
+| System  | Umsetzung |
+| ------- | --------- |
+| Linux   | `pactl` (PulseAudio und PipeWire) |
+| Windows | Core Audio; Lautstärke je Anwendung nur auf x64 |
+| macOS   | AppleScript; keine Lautstärke je Anwendung, Mikrofon über Eingangspegel, Gerätewechsel mit [`SwitchAudioSource`](https://github.com/deweller/switchaudio-osx) |
+
+### Meeting-Tasten
+
+```yaml
+- index: 4
+  action: {type: meeting, app: teams, op: mute}   # camera, hand, blur, leave
+  live: {type: meeting, show: mute}               # camera, hand
+- index: 5
+  action: {type: meeting, app: zoom, op: camera}  # zoom: mute, camera, hand, share, leave
+```
+
+Teams wird über die lokale Drittanbieter-API gesteuert und liefert den
+Status für die Live-Anzeige: in Teams unter *Einstellungen → Datenschutz →
+Drittanbieter-App-API verwalten* aktivieren, dann während eines Meetings
+eine Teams-Taste drücken und in Teams *Zulassen* wählen; der Schlüssel
+landet in der `secrets.yaml`. Zoom, Discord (`mute`, `deafen`) und Google
+Meet (`mute`, `camera`, `hand`) bekommen ihr Tastenkürzel – dafür muss das
+Programm im Vordergrund sein, oder man stellt die Kürzel in Zoom bzw.
+Discord auf „global“.
+
+### MQTT
+
+```yaml
+- index: 6
+  action: {type: mqtt, topic: zigbee2mqtt/lampe/set, body: '{"state":"TOGGLE"}'}
+  live: {type: mqtt, topic: zigbee2mqtt/lampe, attribute: state, active_state: "on", ok_color: '#FACC15'}
+```
+
+Der Broker (`mqtt://host:1883` oder `mqtts://` für TLS) samt Benutzer und
+Passwort steht in der `secrets.yaml` und wird im Editor unter
+*Einstellungen → Integrationen* gepflegt. `retain: true` lässt den Broker
+den Wert behalten; `attribute` liest ein Feld aus JSON-Nachrichten
+(auch verschachtelt wie `sensor.temperature`).
+
+### Kalender
+
+```yaml
+- index: 7
+  live: {type: calendar, url: "https://calendar.google.com/calendar/ical/…/basic.ics", interval_s: 300}
+```
+
+Zeigt den laufenden oder nächsten Termin mit Countdown, 15 Minuten vorher
+färbt sich die Taste. Erlaubt sind `https://`, `webcal://` und lokale
+Dateien; wiederkehrende Termine werden aufgelöst. Die ICS-Adresse von
+Google (*Privatadresse im iCal-Format*) oder Outlook (*Kalender
+veröffentlichen*) ist geheim – die `deck.yaml` also nicht öffentlich teilen.
+
+### Automationen
+
+```yaml
+triggers:
+  - {event: time, at: "18:00", days: [mon, tue, wed, thu, fri], action: {type: switch_page, page: Feierabend}}
+  - {event: app, app: obs, action: {type: obs, op: start_record}}
+  - {event: lock, action: {type: audio, op: mic_mute}}
+```
+
+Ereignisse: `time` (mit `at` und optional `days`), `startup`, `connect`
+(Deck verbunden), `lock`, `unlock` und `app` (Anwendung mit diesem
+Namensteil bekommt den Fokus). Der Editor pflegt sie unter
+*Einstellungen → Automationen*.
+
+### Animierte Icons und Tastendruck
+
+Animierte GIFs lassen sich wie andere Bilder als Icon hochladen; die
+Firmware spielt sie selbst ab. Längere GIFs werden nach 120 Frames
+abgeschnitten, umgerechnet über 1,5 MB große als Standbild gezeigt. Mit `display: {press_feedback: true}`
+erscheint eine gedrückte Taste kurz dunkler und kleiner.
+
+### Plugins
+
+Eigene Aktionen und Live-Anzeigen lassen sich als Plugin in jeder Sprache
+schreiben: ein Ordner unter `plugins/` neben der `deck.yaml` mit einer
+`plugin.yaml` und einem Programm, das JSON-Zeilen über stdin/stdout
+austauscht. Protokoll und Beispiel: [docs/plugins.md](docs/plugins.md),
+[examples/plugins/weather](examples/plugins/weather).
+
+```yaml
+- index: 8
+  action: {type: plugin, plugin: weather, op: refresh}
+  live: {type: plugin, plugin: weather, show: current, settings: {city: Kiel}}
+```
+
+### Mehrere Decks
+
+Mehrere D200 laufen gleichzeitig. Ohne weitere Angabe zeigen alle die
+`deck.yaml`; ein Deck mit eigener Konfiguration wird über seine
+Seriennummer (`ulanzi-deck devices`) zugeordnet:
+
+```yaml
+devices:
+  02C43A015U3671626: deck-02C43A015U3671626.yaml
+```
+
+Im Editor legt *Einstellungen → Allgemein → Decks → Eigene Konfiguration*
+die Datei als Kopie an; oben lässt sich dann wählen, welches Deck
+bearbeitet wird.
+
+### Versionen und Profile
+
+Jedes Speichern legt eine Version in `backups/` neben der `deck.yaml` an
+(die letzten 50 bleiben). Im Editor stellt 🕘 eine ältere wieder her;
+Strg+Z und Strg+Umschalt+Z machen Änderungen vor dem Speichern rückgängig.
+Eine Seite (Seitenmenü → *Seite exportieren*) oder das ganze Deck
+(*Einstellungen → Allgemein*) lässt sich samt Icons als `.deckprofile`
+exportieren und auf einem anderen Rechner importieren.
 
 ### Sprache
 
@@ -287,6 +425,7 @@ Alles läuft im Docker-Container, auf dem Host wird nichts installiert.
 docker compose run --rm dev go test ./...           # Tests
 docker compose run --rm dev sh scripts/build.sh     # Binaries für alle Plattformen nach dist/
 docker compose run --rm dev sh scripts/fetch-assets.sh   # eingebettete Fonts/Icons neu laden
+docker compose run --rm dev sh scripts/notices.sh        # Lizenzhinweise der Go-Module erneuern
 ```
 
 GitHub Actions prüft jeden Push (gofmt, vet, Tests auf Linux, Windows und
@@ -295,8 +434,8 @@ nativ mit cgo, damit das Tray-Icon enthalten ist – und legt ein GitHub-Release
 an – mit `.deb`/`.rpm`, Windows-Installer und macOS-`.dmg`:
 
 ```bash
-git tag v0.4.0 && git push origin v0.4.0
-sh packaging/aur/update.sh 0.4.0     # danach PKGBUILD für das AUR, siehe packaging/aur/README.md
+git tag v0.5.0 && git push origin v0.5.0
+sh packaging/aur/update.sh 0.5.0     # danach PKGBUILD für das AUR, siehe packaging/aur/README.md
 ```
 
 Aufbau (Domain-Driven):
@@ -313,8 +452,11 @@ internal/infrastructure/
   actions/                    Befehle, Kürzel, URLs je Betriebssystem
   metrics/                    Systemwerte
   media/                      „Läuft gerade“ (MPRIS, SMTC, AppleScript)
+  audio/                      Lautstärke, Mikrofon, Ausgabegerät je Betriebssystem
   desktop/                    aktive Anwendung, Bildschirmsperre
-  integrations/               Home Assistant, OBS, secrets.yaml
+  integrations/               Home Assistant, OBS, Teams, MQTT, secrets.yaml
+  calendar/                   ICS-Kalender
+  plugins/                    externe Plugins (JSON über stdin/stdout)
   autostart/                  Autostart je Betriebssystem
 packaging/                    deb/rpm (nfpm), AUR, Windows-Installer, macOS-App
 internal/interfaces/

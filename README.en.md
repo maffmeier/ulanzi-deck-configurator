@@ -11,21 +11,29 @@ dependencies.
 - Keys with icons or text, any number of pages, fixed keys on every page
 - Actions: run a command, keyboard shortcut, type text, open a website,
   HTTP request/webhook, switch page (including "next"/"previous" page),
-  media and volume keys, Home Assistant, OBS
+  media keys, audio (volume also per application, microphone, output
+  device), meeting keys (Teams, Zoom, Discord, Meet), Home Assistant, OBS,
+  MQTT and your own plugins
 - Multi actions (macros) with delays, toggle keys with two states, folders
   with an automatic back key
 - Pages switch automatically with the active application
 - Display automation: dim when idle, night mode, off while the screen is
   locked
+- Automations: actions at a time of day, on start, on screen lock or when
+  an application gets focus
+- Several decks at once, with a shared or their own config
 - Per-key behaviour: long press as a second action, repeat while held, or
   hold a shortcut down (push-to-talk)
 - Info window: clock, firmware CPU/RAM or your own metrics
   (CPU, RAM, GPU, temperature, disk, network, battery)
 - Widgets in the info window and as live displays on keys: command output
   (coloured by exit code), history graph, image/slideshow, timer,
-  "now playing" with cover art
-- Web editor in the style of the Stream Deck software with drag & drop and
-  a built-in icon catalogue (Font Awesome Free + Twemoji)
+  "now playing" with cover art, next calendar event, audio and Teams
+  state, MQTT values
+- Animated GIF icons, optional visible key presses
+- Web editor in the style of the Stream Deck software with drag & drop,
+  a built-in icon catalogue (Font Awesome Free + Twemoji), undo, saved
+  versions and export/import of pages as profiles
 - UI and device texts in English and German (automatic, switchable)
 - Tray icon, autostart, automatic reconnect after unplugging
 - Changes to `deck.yaml` are applied without a restart
@@ -191,6 +199,8 @@ next to it (mode `0600`), which the editor manages and tests under
 ```yaml
 home_assistant: {url: "http://homeassistant.local:8123", token: "<long-lived access token>"}
 obs: {url: "ws://127.0.0.1:4455", password: "<obs-websocket password>"}
+mqtt: {url: "mqtt://homeassistant.local:1883", username: deck, password: "<password>"}
+teams: {token: "<set by Teams when pairing>"}
 ```
 
 ```yaml
@@ -211,6 +221,131 @@ OBS operations: `switch_scene`, `toggle_record`, `start_record`,
 needs obs-websocket 5 (built in since OBS 28). Home Assistant widgets show the
 state or an attribute (`attribute`) and colour the key on `active_state`
 (default `on`).
+
+### Audio
+
+```yaml
+- index: 0
+  action: {type: audio, op: volume_up, step: 5}            # volume_down, mute
+  live: {type: audio, show: volume}
+- index: 1                                                 # Spotify only
+  action: {type: audio, op: volume_up, target: spotify}
+  live: {type: audio, show: volume, target: spotify}
+- index: 2                                                 # red while the microphone is muted
+  action: {type: audio, op: mic_mute}
+  live: {type: audio, show: mic}
+- index: 3                                                 # speakers ↔ headset
+  action: {type: audio, op: output_next}                   # output_set with target: Headset
+  live: {type: audio, show: output}
+```
+
+| System  | Implementation |
+| ------- | -------------- |
+| Linux   | `pactl` (PulseAudio and PipeWire) |
+| Windows | Core Audio; per-application volume on x64 only |
+| macOS   | AppleScript; no per-application volume, microphone via input level, device switching with [`SwitchAudioSource`](https://github.com/deweller/switchaudio-osx) |
+
+### Meeting keys
+
+```yaml
+- index: 4
+  action: {type: meeting, app: teams, op: mute}   # camera, hand, blur, leave
+  live: {type: meeting, show: mute}               # camera, hand
+- index: 5
+  action: {type: meeting, app: zoom, op: camera}  # zoom: mute, camera, hand, share, leave
+```
+
+Teams is controlled through its local third-party app API, which also
+provides the state for the live display: enable it in Teams under
+*Settings → Privacy → Manage third-party app API*, then press a Teams key
+during a meeting and choose *Allow* in Teams; the token is stored in
+`secrets.yaml`. Zoom, Discord (`mute`, `deafen`) and Google Meet (`mute`,
+`camera`, `hand`) get their keyboard shortcut – the app has to be in the
+foreground, or you make the shortcuts global in Zoom or Discord.
+
+### MQTT
+
+```yaml
+- index: 6
+  action: {type: mqtt, topic: zigbee2mqtt/lamp/set, body: '{"state":"TOGGLE"}'}
+  live: {type: mqtt, topic: zigbee2mqtt/lamp, attribute: state, active_state: "on", ok_color: '#FACC15'}
+```
+
+The broker (`mqtt://host:1883`, or `mqtts://` for TLS) with user and
+password lives in `secrets.yaml` and is managed in the editor under
+*Settings → Integrations*. `retain: true` makes the broker keep the
+value; `attribute` reads a field of JSON messages (also nested, like
+`sensor.temperature`).
+
+### Calendar
+
+```yaml
+- index: 7
+  live: {type: calendar, url: "https://calendar.google.com/calendar/ical/…/basic.ics", interval_s: 300}
+```
+
+Shows the current or next event with a countdown; the key changes colour
+15 minutes before. `https://`, `webcal://` and local files work, recurring
+events are expanded. The ICS address from Google (*Secret address in iCal
+format*) or Outlook (*Publish calendar*) is secret – don't share
+`deck.yaml` publicly.
+
+### Automations
+
+```yaml
+triggers:
+  - {event: time, at: "18:00", days: [mon, tue, wed, thu, fri], action: {type: switch_page, page: Evening}}
+  - {event: app, app: obs, action: {type: obs, op: start_record}}
+  - {event: lock, action: {type: audio, op: mic_mute}}
+```
+
+Events: `time` (with `at` and optional `days`), `startup`, `connect` (deck
+connected), `lock`, `unlock` and `app` (an application containing this
+name gets focus). The editor manages them under *Settings → Automations*.
+
+### Animated icons and key presses
+
+Animated GIFs can be uploaded as icons like any other image; the firmware
+plays them itself. Longer GIFs are cut after 120 frames, ones larger than
+1.5 MB after conversion are shown as a still image. With
+`display: {press_feedback: true}` a pressed key is briefly shown darker
+and smaller.
+
+### Plugins
+
+Your own actions and live displays can be written as a plugin in any
+language: a folder below `plugins/` next to `deck.yaml` with a
+`plugin.yaml` and a program that exchanges JSON lines over stdin/stdout.
+Protocol and example: [docs/plugins.en.md](docs/plugins.en.md),
+[examples/plugins/weather](examples/plugins/weather).
+
+```yaml
+- index: 8
+  action: {type: plugin, plugin: weather, op: refresh}
+  live: {type: plugin, plugin: weather, show: current, settings: {city: Kiel}}
+```
+
+### Several decks
+
+Several D200 run at the same time. By default all of them show
+`deck.yaml`; a deck with its own config is mapped by its serial number
+(`ulanzi-deck devices`):
+
+```yaml
+devices:
+  02C43A015U3671626: deck-02C43A015U3671626.yaml
+```
+
+In the editor, *Settings → General → Decks → Own config* creates the file
+as a copy; the switch at the top then selects the deck to edit.
+
+### Versions and profiles
+
+Every save keeps a version in `backups/` next to `deck.yaml` (the last 50
+are kept). In the editor, 🕘 restores an older one; Ctrl+Z and
+Ctrl+Shift+Z undo changes before saving. A page (page menu → *Export
+page*) or the whole deck (*Settings → General*) can be exported with its
+icons as a `.deckprofile` and imported on another machine.
 
 ### Language
 
@@ -284,6 +419,7 @@ Everything runs in the Docker container, nothing is installed on the host.
 docker compose run --rm dev go test ./...           # tests
 docker compose run --rm dev sh scripts/build.sh     # binaries for all platforms into dist/
 docker compose run --rm dev sh scripts/fetch-assets.sh   # re-download embedded fonts/icons
+docker compose run --rm dev sh scripts/notices.sh        # refresh the Go module license notices
 ```
 
 GitHub Actions checks every push (gofmt, vet, tests on Linux, Windows and
@@ -292,8 +428,8 @@ with cgo so the tray icon is included – and creates a GitHub release with
 `.deb`/`.rpm`, Windows installer and macOS `.dmg`:
 
 ```bash
-git tag v0.4.0 && git push origin v0.4.0
-sh packaging/aur/update.sh 0.4.0     # then the AUR PKGBUILD, see packaging/aur/README.md
+git tag v0.5.0 && git push origin v0.5.0
+sh packaging/aur/update.sh 0.5.0     # then the AUR PKGBUILD, see packaging/aur/README.md
 ```
 
 Layout (domain-driven):
@@ -310,8 +446,11 @@ internal/infrastructure/
   actions/                    commands, shortcuts, URLs per OS
   metrics/                    system metrics
   media/                      "now playing" (MPRIS, SMTC, AppleScript)
+  audio/                      volume, microphone, output device per OS
   desktop/                    active application, screen lock
-  integrations/               Home Assistant, OBS, secrets.yaml
+  integrations/               Home Assistant, OBS, Teams, MQTT, secrets.yaml
+  calendar/                   ICS calendars
+  plugins/                    external plugins (JSON over stdin/stdout)
   autostart/                  autostart per OS
 internal/interfaces/
   web/                        HTTP API and editor (Alpine.js)
