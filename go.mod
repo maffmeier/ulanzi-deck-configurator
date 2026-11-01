@@ -6,7 +6,7 @@ require (
 	fyne.io/systray v1.12.2
 	github.com/apognu/gocal v0.9.1
 	github.com/coder/websocket v1.8.15
-	github.com/ebitengine/purego v0.11.1
+	github.com/ebitengine/purego v0.11.2
 	github.com/fogleman/gg v1.3.0
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/shirou/gopsutil/v4 v4.26.9
