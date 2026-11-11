@@ -50,6 +50,7 @@ type SecretStore struct {
 	path string
 	mu   sync.Mutex
 	mod  time.Time
+	size int64
 	data Secrets
 }
 
@@ -60,10 +61,10 @@ func (s *SecretStore) Get() Secrets {
 	defer s.mu.Unlock()
 	info, err := os.Stat(s.path)
 	if err != nil {
-		s.data, s.mod = Secrets{}, time.Time{}
+		s.data, s.mod, s.size = Secrets{}, time.Time{}, 0
 		return s.data
 	}
-	if info.ModTime().Equal(s.mod) {
+	if info.ModTime().Equal(s.mod) && info.Size() == s.size {
 		return s.data
 	}
 	raw, err := os.ReadFile(s.path)
@@ -72,7 +73,7 @@ func (s *SecretStore) Get() Secrets {
 	}
 	var data Secrets
 	if yaml.Unmarshal(raw, &data) == nil {
-		s.data, s.mod = data, info.ModTime()
+		s.data, s.mod, s.size = data, info.ModTime(), info.Size()
 	}
 	return s.data
 }
@@ -86,9 +87,20 @@ func (s *SecretStore) Save(data Secrets) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	if err := os.Rename(tmp, s.path); err != nil {
+		return err
+	}
+	// Two saves within one timestamp tick (coarse on Windows) would look
+	// unchanged to Get, so the cache is updated here.
+	s.data = data
+	if info, err := os.Stat(s.path); err == nil {
+		s.mod, s.size = info.ModTime(), info.Size()
+	}
+	return nil
 }
