@@ -368,7 +368,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
 
-### github.com/ebitengine/purego v0.11.1
+### github.com/ebitengine/purego v0.11.2
 
 ```text
                                  Apache License
@@ -627,7 +627,7 @@ SOFTWARE.
 ```
 
 
-### github.com/godbus/dbus/v5 v5.1.0
+### github.com/godbus/dbus/v5 v5.2.4
 
 ```text
 Copyright (c) 2013, Georg Reinke (<guelfey at gmail dot com>), Google
@@ -676,7 +676,7 @@ testdata/COPYING file for details.
 ```
 
 
-### github.com/shirou/gopsutil/v4 v4.26.9
+### github.com/shirou/gopsutil/v4 v4.26.10
 
 ```text
 gopsutil is distributed under BSD license reproduced below.
@@ -1081,7 +1081,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 
-### golang.org/x/image v0.46.0
+### golang.org/x/image v0.47.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -1147,7 +1147,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/sys v0.48.0
+### golang.org/x/sys v0.49.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -1180,7 +1180,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/text v0.42.0
+### golang.org/x/text v0.43.0
 
 ```text
 Copyright 2009 The Go Authors.
