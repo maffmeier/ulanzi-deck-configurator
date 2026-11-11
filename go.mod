@@ -12,8 +12,8 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
-	golang.org/x/image v0.46.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/image v0.47.0
+	golang.org/x/sys v0.49.0
 	gopkg.in/yaml.v3 v3.0.1
 	rafaelmartins.com/p/usbhid v0.0.0-20260930125856-1014bb53f097
 )
@@ -28,5 +28,5 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
